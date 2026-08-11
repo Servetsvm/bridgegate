@@ -35,13 +35,95 @@ function renderAdminTab(){
   if(adminTab==='setup') setTimeout(adminUpdateCalc, 0);
 }
 
+// ── Team Match helpers (2 teams, 2+ pairs per team) ──
+function teamMatchPairCount(){
+  const v=parseInt(document.getElementById('aTeamPairs')?.value||0);
+  return isNaN(v)?0:v;
+}
+function teamMatchSettingsFromUI(){
+  return {
+    teamA:(document.getElementById('aTeamA')?.value||'Team A').trim()||'Team A',
+    teamB:(document.getElementById('aTeamB')?.value||'Team B').trim()||'Team B',
+    pairsPerTeam:teamMatchPairCount()
+  };
+}
+function generateTeamMatch(pairCount, boardsPerRound, teamAName, teamBName){
+  const movements={}, pairs={};
+  for(let i=1;i<=pairCount;i++)pairs['p'+i]={id:'p'+i,name:'Pair '+i,dir:'',startTable:0,isPhantom:false,team:'A',teamName:teamAName,teamPair:i};
+  for(let i=1;i<=pairCount;i++){const id='p'+(pairCount+i);pairs[id]={id,name:'Pair '+(pairCount+i),dir:'',startTable:0,isPhantom:false,team:'B',teamName:teamBName,teamPair:i};}
+  const rounds=pairCount;
+  const activeCount=pairCount%2===0?pairCount:pairCount-1;
+  for(let r=0;r<rounds;r++){
+    const boardStart=r*boardsPerRound+1,boardEnd=boardStart+boardsPerRound-1;
+    const sitA=pairCount%2===1?((r%pairCount)+1):null;
+    const sitB=pairCount%2===1?(((r+1)%pairCount)+1):null;
+    const aList=Array.from({length:pairCount},(_,i)=>i+1).filter(i=>i!==sitA);
+    const bList=Array.from({length:pairCount},(_,i)=>i+1).filter(i=>i!==sitB);
+    for(let i=0;i<activeCount/2;i++){
+      const aIndex=aList[2*i];
+      const bIndex=bList[(2*i+r)%activeCount];
+      const a='p'+aIndex,b='p'+(pairCount+bIndex),t1=2*i+1,t2=2*i+2;
+      movements[(r+1)+'_'+t1]={ns:a,ew:b,boardStart,boardEnd,teamMatch:true,matchId:'M'+(i+1),teamA:a,teamB:b,mirrorTable:t2,sitoutA:sitA,sitoutB:sitB};
+      movements[(r+1)+'_'+t2]={ns:b,ew:a,boardStart,boardEnd,teamMatch:true,matchId:'M'+(i+1),teamA:a,teamB:b,mirrorTable:t1,sitoutA:sitA,sitoutB:sitB};
+    }
+  }
+  return{movements,pairs,rounds,tableCount:activeCount};
+}
+
+function calcTeamMatchIMP(){
+  const s=getState();
+  if(s.movement!=='team')return null;
+  const boards=getBoards(), mv=getMovements();
+  const rows=[];
+  let totalA=0,totalB=0;
+  for(let r=1;r<=s.roundCount;r++){
+    for(let t=1;t<=s.tableCount;t+=2){
+      const m1=mv[r+'_'+t], m2=mv[r+'_'+(t+1)];
+      if(!m1||!m2)continue;
+      let roundIMP=0,done=0;
+      for(let b=m1.boardStart;b<=m1.boardEnd;b++){
+        const d1=boards[t+'_'+r+'_'+b], d2=boards[(t+1)+'_'+r+'_'+b];
+        if(!d1||!d2||d1.status!=='done'||d2.status!=='done'||typeof d1.nsScore!=='number'||typeof d2.nsScore!=='number')continue;
+        // Team A is NS at table 1 and EW at table 2.
+        const aScore=d1.nsScore-d2.nsScore;
+        const imp=scoreToIMP(aScore);
+        roundIMP+=imp; done++;
+      }
+      totalA+=roundIMP; totalB-=roundIMP;
+      rows.push({round:r,match:m1.matchId||'',a:m1.teamA,b:m1.teamB,imp:roundIMP,done});
+    }
+  }
+  return{rows,totalA,totalB};
+}
+function renderTeamMatchCard(){
+  const s=getState();
+  if(s.movement!=='team'||!s.teams)return'';
+  const tm=calcTeamMatchIMP();
+  const doneRows=(tm?.rows||[]).filter(x=>x.done>0);
+  return`<div class="card">
+    <div class="card-title"><span>🏆</span> Team Match — IMP</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <div style="flex:1;min-width:140px;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);">
+        <div style="font-size:.72rem;color:var(--text3);">${s.teams.A.name}</div>
+        <div style="font-size:1.45rem;font-weight:800;color:var(--blue);">${tm?.totalA||0} IMP</div>
+      </div>
+      <div style="flex:1;min-width:140px;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);">
+        <div style="font-size:.72rem;color:var(--text3);">${s.teams.B.name}</div>
+        <div style="font-size:1.45rem;font-weight:800;color:var(--gold);">${Math.abs(tm?.totalB||0)} IMP</div>
+      </div>
+    </div>
+    ${doneRows.length?`<div style="font-size:.76rem;color:var(--text2);">Completed match/round IMPs: ${doneRows.map(x=>`R${x.round} ${x.imp>=0?'+':''}${x.imp}`).join(' · ')}</div>`:'<div style="font-size:.76rem;color:var(--text3);">No complete two-table board comparison yet.</div>'}
+  </div>`;
+}
+
 // ── Setup ──
 function renderSetup(){
   const s=getState();
-  // Calculate derived values for display
   const playerCount=parseInt(s._setupPlayers||0);
   const tableCount=playerCount>0?Math.floor(playerCount/4):0;
   const hasPhantom=playerCount>0&&playerCount%4!==0;
+  const isTeam=s.movement==='team';
+  const teamPairs=s._teamPairs||2;
   return`
   <div class="card">
     <div class="card-title"><span>⚙️</span> Tournament Setup</div>
@@ -49,8 +131,8 @@ function renderSetup(){
     <div class="field-row">
       <div class="field">
         <label>Number of Players</label>
-        <input type="number" id="aPlayers" value="${s._setupPlayers||16}" min="4" max="120" oninput="adminUpdateCalc()">
-        <div style="font-size:0.72rem;color:var(--text3);margin-top:3px;" id="calcHint">→ ${tableCount} tables${hasPhantom?' + 1 phantom':''}</div>
+        <input type="number" id="aPlayers" value="${isTeam?teamPairs*4:(s._setupPlayers||16)}" min="4" max="120" ${isTeam?'readonly':''} oninput="adminUpdateCalc()">
+        <div style="font-size:0.72rem;color:var(--text3);margin-top:3px;" id="calcHint">→ ${isTeam?teamPairs+' pairs · 2 teams':tableCount+' tables'+(hasPhantom?' + 1 phantom':'')}</div>
       </div>
       <div class="field">
         <label>Boards per Round</label>
@@ -62,8 +144,8 @@ function renderSetup(){
       <div class="field">
         <label>Scoring</label>
         <select id="aScoring">
-          <option value="MP" ${s.scoring!=='IMP'?'selected':''}>Matchpoints (MP)</option>
-          <option value="IMP" ${s.scoring==='IMP'?'selected':''}>IMPs</option>
+          <option value="MP" ${!isTeam&&s.scoring!=='IMP'?'selected':''}>Matchpoints (MP)</option>
+          <option value="IMP" ${isTeam||s.scoring==='IMP'?'selected':''}>IMPs</option>
         </select>
       </div>
     </div>
@@ -75,7 +157,16 @@ function renderSetup(){
         <option value="swiss" ${s.movement==='swiss'?'selected':''}>Swiss — pairings adapt to standings each round</option>
         <option value="team" ${s.movement==='team'?'selected':''}>Team Match — team-based match movement</option>
       </select>
-      <div style="font-size:0.72rem;color:var(--text3);margin-top:3px;" id="movHint">Mitchell: pair count is double the table count. Howell: everyone plays everyone. Swiss: pairing is re-computed automatically after every round.</div>
+      <div style="font-size:0.72rem;color:var(--text3);margin-top:3px;" id="movHint">${isTeam?'Team Match: 2 teams, 2 or more pairs per team, two-table mirrored boards and IMP scoring.':'Mitchell: NS fixed, EW moves. Howell: everyone moves. Swiss: pairing is re-computed automatically after every round.'}</div>
+    </div>
+    <div id="aTeamSettings" style="display:${isTeam?'block':'none'};padding:10px 12px;margin:8px 0 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;">
+      <div style="font-size:.76rem;font-weight:700;color:var(--gold);margin-bottom:8px;">🏆 Team Match Settings</div>
+      <div class="field-row">
+        <div class="field"><label>Team A</label><input id="aTeamA" value="${s._teamAName||'Team A'}" placeholder="Team A"></div>
+        <div class="field"><label>Team B</label><input id="aTeamB" value="${s._teamBName||'Team B'}" placeholder="Team B"></div>
+      </div>
+      <div class="field"><label>Pairs per Team</label><input type="number" id="aTeamPairs" value="${teamPairs}" min="2" max="12" oninput="adminUpdateCalc()">
+      <div style="font-size:.7rem;color:var(--text3);margin-top:3px;">${teamPairs} pairs/team = ${teamPairs*2} pairs = ${teamPairs*4} players. Each opponent pairing uses two tables and the same boards.</div></div>
     </div>
     <div class="field" id="aSwissRoundsField" style="display:${s.movement==='swiss'?'block':'none'};">
       <label>Number of Rounds (Swiss)</label>
@@ -84,6 +175,7 @@ function renderSetup(){
     </div>
     <button class="btn btn-gold btn-full" onclick="adminSetup()" style="margin-bottom:6px;">🚀 Create Tournament</button>
   </div>
+  ${renderTeamMatchCard()}
   <div class="card">
     <div class="card-title"><span>🎮</span> Round Control</div>
     ${(()=>{
@@ -98,135 +190,93 @@ function renderSetup(){
         }
       }
       const allDone=totalBoards>0&&doneBoards>=totalBoards;
-      if(allDone&&s.currentRound<s.roundCount){
-        return`<div style="background:rgba(76,175,125,0.15);border:2px solid var(--green);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">
-          <span style="font-size:1.5rem;">✅</span>
-          <div><div style="font-weight:700;color:var(--green);font-size:0.88rem;">All tables finished Round ${s.currentRound}!</div>
-          <div style="font-size:0.76rem;color:var(--text2);margin-top:2px;">${doneBoards}/${totalBoards} boards completed. You can start Round ${s.currentRound+1}.</div></div>
-        </div>`;
-      }
-      if(allDone&&s.currentRound>=s.roundCount){
-        return`<div style="background:rgba(201,168,76,0.15);border:2px solid var(--gold);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">
-          <span style="font-size:1.5rem;">🏁</span>
-          <div><div style="font-weight:700;color:var(--gold);font-size:0.88rem;">Tournament finished!</div>
-          <div style="font-size:0.76rem;color:var(--text2);margin-top:2px;">All rounds are complete. You can finish the tournament.</div></div>
-        </div>`;
-      }
+      if(allDone&&s.currentRound<s.roundCount)return`<div style="background:rgba(76,175,125,0.15);border:2px solid var(--green);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;"><span style="font-size:1.5rem;">✅</span><div><div style="font-weight:700;color:var(--green);font-size:0.88rem;">All tables finished Round ${s.currentRound}!</div><div style="font-size:0.76rem;color:var(--text2);margin-top:2px;">${doneBoards}/${totalBoards} boards completed. You can start Round ${s.currentRound+1}.</div></div></div>`;
+      if(allDone&&s.currentRound>=s.roundCount)return`<div style="background:rgba(201,168,76,0.15);border:2px solid var(--gold);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;"><span style="font-size:1.5rem;">🏁</span><div><div style="font-weight:700;color:var(--gold);font-size:0.88rem;">Tournament finished!</div><div style="font-size:0.76rem;color:var(--text2);margin-top:2px;">All rounds are complete. You can finish the tournament.</div></div></div>`;
       return`<div style="font-size:0.78rem;color:var(--text2);margin-bottom:8px;">Round ${s.currentRound}: ${doneBoards}/${totalBoards} boards completed</div>`;
     })()}
-    <div class="round-card">
-      <div class="rc-head">
-        <span class="rc-num">Round ${s.currentRound||0} / ${s.roundCount||0}</span>
-        <span class="rc-stat">${s.status==='running'?'🟢 Running':s.status==='setup'?'⏳ Setup':'🏁 Finished'} &nbsp;|&nbsp; ${s.scoring||'MP'}</span>
-      </div>
-      <div class="round-progress"><div class="round-bar" style="width:${s.roundCount?(s.currentRound/s.roundCount*100):0}%"></div></div>
-      ${s._startedAt?(()=>{const ms=Date.now()-new Date(s._startedAt).getTime();const h=Math.floor(ms/3600000);const m=Math.floor((ms%3600000)/60000);return`<div style='font-size:0.68rem;color:var(--text3);margin-top:4px;'>⏱ Elapsed: ${h>0?h+'h ':''} ${m}m</div>`;})():''}
-    </div>
+    <div class="round-card"><div class="rc-head"><span class="rc-num">Round ${s.currentRound||0} / ${s.roundCount||0}</span><span class="rc-stat">${s.status==='running'?'🟢 Running':s.status==='setup'?'⏳ Setup':'🏁 Finished'} &nbsp;|&nbsp; ${s.scoring||'MP'}</span></div><div class="round-progress"><div class="round-bar" style="width:${s.roundCount?(s.currentRound/s.roundCount*100):0}%"></div></div></div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
       ${s.status==='setup'&&s.roundCount>0?`<button class="btn btn-green btn-full" onclick="adminStart()">▶ Start Round 1</button>`:''}
       ${s.status==='running'&&s.currentRound<s.roundCount?`<button class="btn btn-gold" onclick="adminNextRound()">⏭ Next Round (${s.currentRound+1})</button>`:''}
       ${s.status==='running'&&s.currentRound>=s.roundCount?`<button class="btn btn-blue" onclick="adminFinish()">🏁 Finish Tournament</button>`:''}
     </div>
-    ${s.status==='running'||s.status==='setup'?`
-    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
-      <div style="font-size:0.72rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📱 Table Link</div>
-      <div style="font-size:0.72rem;color:var(--text2);margin-bottom:8px;">Send this to whoever is opening a table — it skips straight to the Table password screen for this club.</div>
-      <div style="display:flex;gap:6px;">
-        <input id="tableLinkBox" readonly value="${location.origin}${location.pathname}?club=${CLUB_ID}&role=table" style="flex:1;font-size:0.72rem;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text2);">
-        <button class="btn btn-gold btn-sm" onclick="copyTableLink()">📋 Copy</button>
-      </div>
-    </div>
-    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
-      <div style="font-size:0.72rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">⚠️ Slow Table Alert</div>
-      <div style="font-size:0.72rem;color:var(--text2);margin-bottom:8px;">Beep + on-screen warning if a table hasn't entered a score in this many minutes.</div>
-      <div style="display:flex;gap:6px;align-items:center;">
-        <input type="number" id="stallMinutesInput" value="${s.stallAlertMinutes||15}" min="1" max="120" style="width:80px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);">
-        <span style="font-size:0.76rem;color:var(--text2);">minutes</span>
-        <button class="btn btn-ghost btn-sm" onclick="saveStallMinutes()">Save</button>
-      </div>
-    </div>`:''}
+    ${s.status==='running'||s.status==='setup'?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-size:0.72rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📱 Table Link</div><div style="font-size:0.72rem;color:var(--text2);margin-bottom:8px;">Send this to whoever is opening a table — it skips straight to the Table password screen for this club.</div><div style="display:flex;gap:6px;"><input id="tableLinkBox" readonly value="${location.origin}${location.pathname}?club=${CLUB_ID}&role=table" style="flex:1;font-size:0.72rem;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text2);"><button class="btn btn-gold btn-sm" onclick="copyTableLink()">📋 Copy</button></div></div><div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-size:0.72rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">⚠️ Slow Table Alert</div><div style="font-size:0.72rem;color:var(--text2);margin-bottom:8px;">Beep + on-screen warning if a table hasn't entered a score in this many minutes.</div><div style="display:flex;gap:6px;align-items:center;"><input type="number" id="stallMinutesInput" value="${s.stallAlertMinutes||15}" min="1" max="120" style="width:80px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);"><span style="font-size:0.76rem;color:var(--text2);">minutes</span><button class="btn btn-ghost btn-sm" onclick="saveStallMinutes()">Save</button></div></div>`:''}
   </div>
-  <div class="card">
-    <div class="card-title"><span>💾</span> Data</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;">
-      <button class="btn btn-blue" onclick="adminExport()">⬇ Export</button>
-      <button class="btn btn-purple" onclick="adminImportOpen()">⬆ Import</button>
-      <button class="btn btn-red" onclick="adminReset()">🗑 Reset</button>
-    </div>
-  </div>`;
+  <div class="card"><div class="card-title"><span>💾</span> Data</div><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn btn-blue" onclick="adminExport()">⬇ Export</button><button class="btn btn-purple" onclick="adminImportOpen()">⬆ Import</button><button class="btn btn-red" onclick="adminReset()">🗑 Reset</button></div></div>`;
 }
 
 window.adminUpdateCalc=function(){
-  const players=parseInt(document.getElementById('aPlayers')?.value||0);
-  const bpr=parseInt(document.getElementById('aBPR')?.value||3);
   const mov=document.getElementById('aMovement')?.value||'mitchell';
-  const tables=Math.floor(players/4);
-  const hasPhantom=players%4!==0;
-  const pairCount=tables*2+(hasPhantom?1:0);
+  const bpr=parseInt(document.getElementById('aBPR')?.value||3);
   const swissField=document.getElementById('aSwissRoundsField');
+  const teamField=document.getElementById('aTeamSettings');
   if(swissField)swissField.style.display=(mov==='swiss')?'block':'none';
-  // Rounds determined by movement type
-  let rounds;
-  if(mov==='mitchell')rounds=tables;
-  else if(mov==='howell')rounds=pairCount-1;
-  else rounds=parseInt(document.getElementById('aSwissRounds')?.value||7); // swiss: user-chosen
+  if(teamField)teamField.style.display=(mov==='team')?'block':'none';
+  const playersEl=document.getElementById('aPlayers');
+  let players=parseInt(playersEl?.value||0), rounds=0, tables=0;
+  if(mov==='team'){
+    const pp=teamMatchPairCount()||2;
+    players=pp*4;tables=pp;rounds=pp;
+    if(playersEl){playersEl.value=players;playersEl.readOnly=true;}
+  }else{
+    if(playersEl)playersEl.readOnly=false;
+    const phantom=players%4!==0;
+    tables=Math.floor(players/4);
+    const pairCount=tables*2+(phantom?1:0);
+    if(mov==='mitchell')rounds=tables;
+    else if(mov==='howell')rounds=pairCount-1;
+    else rounds=parseInt(document.getElementById('aSwissRounds')?.value||7);
+  }
   const totalBoards=rounds*bpr;
-  const hint=document.getElementById('calcHint');
-  const bprHint=document.getElementById('bprHint');
-  if(hint)hint.textContent=`→ ${tables} table${tables!==1?'s':''}${hasPhantom?' + phantom pair (not supported for Swiss yet)':''}`;
-  if(bprHint&&rounds>0)bprHint.textContent=`→ ${bpr} boards/round × ${rounds} rounds = ${totalBoards} total boards · each pair plays ${rounds*bpr} boards`;
-  // Store computed values for adminSetup to read
-  window._computedRounds=rounds;
-  window._computedTotalBoards=totalBoards;
+  const hint=document.getElementById('calcHint'), bprHint=document.getElementById('bprHint');
+  if(hint)hint.textContent=mov==='team'?`→ ${tables} tables · 2 teams · ${tables} pairs/team`:`→ ${tables} table${tables!==1?'s':''}${players%4!==0?' + phantom':''}`;
+  if(bprHint&&rounds>0)bprHint.textContent=`→ ${bpr} boards/round × ${rounds} rounds = ${totalBoards} total boards`;
+  window._computedRounds=rounds;window._computedTotalBoards=totalBoards;
 };
 
 window.adminSetup=function(){
-  const now=new Date();
-  const pad=n=>String(n).padStart(2,'0');
+  const now=new Date();const pad=n=>String(n).padStart(2,'0');
   const autoName=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes());
   document.getElementById('aName').value=autoName;
   const name=autoName;
-  const players=parseInt(document.getElementById('aPlayers').value);
-  const bpr=parseInt(document.getElementById('aBPR').value);
-  const scoring=document.getElementById('aScoring').value;
   const mov=document.getElementById('aMovement').value;
-  if(isNaN(players)||players<4){toast('❌ Min 4 players');return;}
+  const bpr=parseInt(document.getElementById('aBPR').value);
+  let players=parseInt(document.getElementById('aPlayers').value),tables,phantom=false,pairCount,rounds,swissRounds;
+  let result,teams=null;
   if(isNaN(bpr)||bpr<1||bpr>8){toast('❌ Boards/round: 1-8');return;}
-  const tables=Math.floor(players/4);
-  const phantom=players%4!==0;
-  if(tables<2){toast('❌ Need at least 8 players (2 tables)');return;}
-  if(mov==='swiss'&&phantom){toast('❌ Swiss (v1) needs a player count divisible by 4 — no bye/phantom support yet');return;}
-  const pairCount=tables*2+(phantom?1:0);
-  let rounds, swissRounds;
-  if(mov==='mitchell')rounds=tables;
-  else if(mov==='howell')rounds=pairCount-1;
-  else{
-    swissRounds=parseInt(document.getElementById('aSwissRounds').value);
-    if(isNaN(swissRounds)||swissRounds<3){toast('❌ Swiss: choose at least 3 rounds');return;}
-    if(swissRounds>pairCount-1){toast(`❌ Swiss: max ${pairCount-1} rounds for ${pairCount} pairs (can't avoid repeat pairings beyond that)`);return;}
-    rounds=swissRounds;
+  if(mov==='team'){
+    const tm=teamMatchSettingsFromUI();
+    if(tm.pairsPerTeam<2||tm.pairsPerTeam>12){toast('❌ Team Match: 2-12 pairs per team');return;}
+    players=tm.pairsPerTeam*4;pairCount=tm.pairsPerTeam*2;rounds=tm.pairsPerTeam;
+    result=generateTeamMatch(tm.pairsPerTeam,bpr,tm.teamA,tm.teamB);
+    tables=result.tableCount;
+    teams={A:{id:'A',name:tm.teamA,pairs:Object.keys(result.pairs).filter(id=>result.pairs[id].team==='A')},B:{id:'B',name:tm.teamB,pairs:Object.keys(result.pairs).filter(id=>result.pairs[id].team==='B')}};
+  }else{
+    if(isNaN(players)||players<4){toast('❌ Min 4 players');return;}
+    tables=Math.floor(players/4);phantom=players%4!==0;
+    if(tables<2){toast('❌ Need at least 8 players (2 tables)');return;}
+    pairCount=tables*2+(phantom?1:0);
+    if(mov==='swiss'&&phantom){toast('❌ Swiss (v1) needs a player count divisible by 4 — no bye/phantom support yet');return;}
+    if(mov==='mitchell')rounds=tables;
+    else if(mov==='howell')rounds=pairCount-1;
+    else{swissRounds=parseInt(document.getElementById('aSwissRounds').value);if(isNaN(swissRounds)||swissRounds<3){toast('❌ Swiss: choose at least 3 rounds');return;}if(swissRounds>pairCount-1){toast(`❌ Swiss: max ${pairCount-1} rounds for ${pairCount} pairs`);return;}rounds=swissRounds;}
+    const totalBoards=rounds*bpr;
+    if(mov==='mitchell')result=generateMitchell(tables,bpr,phantom,totalBoards);
+    else if(mov==='howell')result=generateHowell(tables,bpr,totalBoards);
+    else result=generateSwissRound1(pairCount,bpr,rounds);
   }
   const totalBoards=rounds*bpr;
-  if(rounds<1){toast('❌ Cannot compute rounds — check player count');return;}
-
-  let result;
-  if(mov==='team'){
-    toast('ℹ️ Team Match seçeneği eklendi. Takım maçı hareket sistemi henüz etkin değil.');
-    return;
-  }
-  if(mov==='mitchell'){result=generateMitchell(tables,bpr,phantom,totalBoards);}
-  else if(mov==='howell'){result=generateHowell(tables,bpr,totalBoards);}
-  else{result=generateSwissRound1(pairCount,bpr,rounds);}
   setMovements(result.movements);setPairs(result.pairs);setBoards({});setApprovals({});
   const s=getState();
-  s.name=name;s.tableCount=tables;s.boardsPerRound=bpr;s.totalBoards=totalBoards;
-  s.roundCount=rounds;s.phantom=phantom;s.status='setup';s.currentRound=0;
-  s.movement=mov;s.scoring=scoring;s._setupPlayers=players;s._setupSwissRounds=swissRounds||s._setupSwissRounds;
+  s.name=name;s.tableCount=tables;s.boardsPerRound=bpr;s.totalBoards=totalBoards;s.roundCount=rounds;s.phantom=phantom;s.status='setup';s.currentRound=0;
+  s.movement=mov;s.scoring=mov==='team'?'IMP':document.getElementById('aScoring').value;s._setupPlayers=players;s._setupSwissRounds=swissRounds||s._setupSwissRounds;
+  if(mov==='team'){
+    const tm=teamMatchSettingsFromUI();s.teams=teams;s._teamPairs=tm.pairsPerTeam;s._teamAName=tm.teamA;s._teamBName=tm.teamB;s._teamScoring='IMP';
+  }else{delete s.teams;delete s._teamPairs;delete s._teamAName;delete s._teamBName;}
   setState(s);
-  addLog('ok','Tournament created',`${players} players, ${tables} tables, ${result.rounds} rounds, ${mov}, ${scoring}`);
-  toast('✅ Tournament created! Enter player names in the Players tab.');
-  adminTab='players';
-  refreshTopbar();renderAdminPanel();
+  addLog('ok','Tournament created',`${players} players, ${tables} tables, ${result.rounds} rounds, ${mov}, ${s.scoring}`);
+  toast(mov==='team'?`✅ Team Match created: ${s.teams.A.name} vs ${s.teams.B.name}`:'✅ Tournament created! Enter player names in the Players tab.');
+  adminTab='players';refreshTopbar();renderAdminPanel();
 };
 
 window.adminForceUnlock=function(tableNo){
@@ -623,8 +673,8 @@ function renderPlayersAdmin(){
   const pw=keys.filter(k=>k.startsWith('p')&&!k.startsWith('phantom')).sort((a,b)=>parseInt(a.slice(1))-parseInt(b.slice(1)));
   const allKeys=[...ns,...ew,...pw];
 
-  const dirLabel=k=>k.startsWith('ns_')?`NS ${k.split('_')[1]}`:k.startsWith('ew_')?`EW ${k.split('_')[1]}`:`Pair ${k.slice(1)}`;
-  const dirColor=k=>k.startsWith('ns_')?'var(--blue)':k.startsWith('ew_')?'var(--gold)':'var(--text3)';
+  const dirLabel=k=>{const p=pairs[k];if(p?.team)return `${p.team==='A'?'Team A':'Team B'} · Pair ${p.teamPair||k.slice(1)}`;return k.startsWith('ns_')?`NS ${k.split('_')[1]}`:k.startsWith('ew_')?`EW ${k.split('_')[1]}`:`Pair ${k.slice(1)}`;};
+  const dirColor=k=>pairs[k]?.team==='A'?'var(--blue)':pairs[k]?.team==='B'?'var(--gold)':k.startsWith('ns_')?'var(--blue)':k.startsWith('ew_')?'var(--gold)':'var(--text3)';
 
   const mkRow=k=>{
     const p=pairs[k];
