@@ -1,6 +1,13 @@
 //  ADMIN PANEL
 // ══════════════════════════════════════════════════════
 let adminTab='setup';
+function teamMatchLang(){
+  return (window.isTurkish&&window.isTurkish())?'tr':'en';
+}
+function teamTxt(en,tr){ return teamMatchLang()==='tr'?tr:en; }
+window.addEventListener('bridgegate:languagechange',()=>{
+  if(document.getElementById('adminContent')) renderAdminTab();
+});
 
 function renderAdminPanel(){
   document.getElementById('panelContent').innerHTML=`
@@ -42,8 +49,8 @@ function teamMatchPairCount(){
 }
 function teamMatchSettingsFromUI(){
   return {
-    teamA:(document.getElementById('aTeamA')?.value||'Team A').trim()||'Team A',
-    teamB:(document.getElementById('aTeamB')?.value||'Team B').trim()||'Team B',
+    teamA:(document.getElementById('aTeamA')?.value||teamTxt('Team A','Takım A')).trim()||teamTxt('Team A','Takım A'),
+    teamB:(document.getElementById('aTeamB')?.value||teamTxt('Team B','Takım B')).trim()||teamTxt('Team B','Takım B'),
     pairsPerTeam:teamMatchPairCount()
   };
 }
@@ -101,7 +108,7 @@ function renderTeamMatchCard(){
   const tm=calcTeamMatchIMP();
   const doneRows=(tm?.rows||[]).filter(x=>x.done>0);
   return`<div class="card">
-    <div class="card-title"><span>🏆</span> Team Match — IMP</div>
+    <div class="card-title"><span>🏆</span> ${teamTxt('Team Match — IMP','Takım Maçı — IMP')}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
       <div style="flex:1;min-width:140px;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);">
         <div style="font-size:.72rem;color:var(--text3);">${s.teams.A.name}</div>
@@ -112,7 +119,7 @@ function renderTeamMatchCard(){
         <div style="font-size:1.45rem;font-weight:800;color:var(--gold);">${Math.abs(tm?.totalB||0)} IMP</div>
       </div>
     </div>
-    ${doneRows.length?`<div style="font-size:.76rem;color:var(--text2);">Completed match/round IMPs: ${doneRows.map(x=>`R${x.round} ${x.imp>=0?'+':''}${x.imp}`).join(' · ')}</div>`:'<div style="font-size:.76rem;color:var(--text3);">No complete two-table board comparison yet.</div>'}
+    ${doneRows.length?`<div style="font-size:.76rem;color:var(--text2);">${teamTxt('Completed match/round IMPs:','Tamamlanan maç/tur IMPleri:')} ${doneRows.map(x=>`R${x.round} ${x.imp>=0?'+':''}${x.imp}`).join(' · ')}</div>`:'<div style="font-size:.76rem;color:var(--text3);">${teamTxt('No complete two-table board comparison yet.','Henüz tamamlanmış iki masalı board karşılaştırması yok.')}</div>'}
   </div>`;
 }
 
@@ -155,17 +162,17 @@ function renderSetup(){
         <option value="mitchell" ${s.movement==='mitchell'?'selected':''}>Mitchell — NS fixed, EW moves</option>
         <option value="howell" ${s.movement==='howell'?'selected':''}>Howell — all pairs move</option>
         <option value="swiss" ${s.movement==='swiss'?'selected':''}>Swiss — pairings adapt to standings each round</option>
-        <option value="team" ${s.movement==='team'?'selected':''}>Team Match — team-based match movement</option>
+        <option value="team" ${s.movement==='team'?'selected':''}>${teamTxt('Team Match — team-based match movement','Takım Maçı — takım tabanlı hareket')}</option>
       </select>
-      <div style="font-size:0.72rem;color:var(--text3);margin-top:3px;" id="movHint">${isTeam?'Team Match: 2 teams, 2 or more pairs per team, two-table mirrored boards and IMP scoring.':'Mitchell: NS fixed, EW moves. Howell: everyone moves. Swiss: pairing is re-computed automatically after every round.'}</div>
+      <div style="font-size:0.72rem;color:var(--text3);margin-top:3px;" id="movHint">${isTeam?'${teamTxt('Team Match: 2 teams, 2 or more pairs per team, two-table mirrored boards and IMP scoring.','Takım Maçı: 2 takım, takım başına 2 veya daha fazla çift, iki masada aynı boardlar ve IMP skorlaması.')}':'${teamTxt('Mitchell: NS fixed, EW moves. Howell: everyone moves. Swiss: pairing is re-computed automatically after every round.','Mitchell: NS sabit, EW hareket eder. Howell: herkes hareket eder. İsviçre: eşleşmeler her turdan sonra otomatik hesaplanır.')}'}</div>
     </div>
     <div id="aTeamSettings" style="display:${isTeam?'block':'none'};padding:10px 12px;margin:8px 0 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;">
-      <div style="font-size:.76rem;font-weight:700;color:var(--gold);margin-bottom:8px;">🏆 Team Match Settings</div>
+      <div style="font-size:.76rem;font-weight:700;color:var(--gold);margin-bottom:8px;">🏆 ${teamTxt('Team Match Settings','Takım Maçı Ayarları')}</div>
       <div class="field-row">
-        <div class="field"><label>Team A</label><input id="aTeamA" value="${s._teamAName||'Team A'}" placeholder="Team A"></div>
-        <div class="field"><label>Team B</label><input id="aTeamB" value="${s._teamBName||'Team B'}" placeholder="Team B"></div>
+        <div class="field"><label>${teamTxt('Team A','Takım A')}</label><input id="aTeamA" value="${s._teamAName||teamTxt('Team A','Takım A')}" placeholder="${teamTxt('Team A','Takım A')}"></div>
+        <div class="field"><label>${teamTxt('Team B','Takım B')}</label><input id="aTeamB" value="${s._teamBName||teamTxt('Team B','Takım B')}" placeholder="${teamTxt('Team B','Takım B')}"></div>
       </div>
-      <div class="field"><label>Pairs per Team</label><input type="number" id="aTeamPairs" value="${teamPairs}" min="2" max="12" oninput="adminUpdateCalc()">
+      <div class="field"><label>${teamTxt('Pairs per Team','Takım Başına Çift')}</label><input type="number" id="aTeamPairs" value="${teamPairs}" min="2" max="12" oninput="adminUpdateCalc()">
       <div style="font-size:.7rem;color:var(--text3);margin-top:3px;">${teamPairs} pairs/team = ${teamPairs*2} pairs = ${teamPairs*4} players. Each opponent pairing uses two tables and the same boards.</div></div>
     </div>
     <div class="field" id="aSwissRoundsField" style="display:${s.movement==='swiss'?'block':'none'};">
@@ -275,7 +282,7 @@ window.adminSetup=function(){
   }else{delete s.teams;delete s._teamPairs;delete s._teamAName;delete s._teamBName;}
   setState(s);
   addLog('ok','Tournament created',`${players} players, ${tables} tables, ${result.rounds} rounds, ${mov}, ${s.scoring}`);
-  toast(mov==='team'?`✅ Team Match created: ${s.teams.A.name} vs ${s.teams.B.name}`:'✅ Tournament created! Enter player names in the Players tab.');
+  toast(mov==='team'?`✅ ${teamTxt('Team Match created:','Takım Maçı oluşturuldu:')} ${s.teams.A.name} vs ${s.teams.B.name}`:'✅ Tournament created! Enter player names in the Players tab.');
   adminTab='players';refreshTopbar();renderAdminPanel();
 };
 
