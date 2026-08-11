@@ -73,6 +73,7 @@ function renderSetup(){
         <option value="mitchell" ${s.movement==='mitchell'?'selected':''}>Mitchell — NS fixed, EW moves</option>
         <option value="howell" ${s.movement==='howell'?'selected':''}>Howell — all pairs move</option>
         <option value="swiss" ${s.movement==='swiss'?'selected':''}>Swiss — pairings adapt to standings each round</option>
+        <option value="team" ${s.movement==='team'?'selected':''}>Team Match — team-based match movement</option>
       </select>
       <div style="font-size:0.72rem;color:var(--text3);margin-top:3px;" id="movHint">Mitchell: pair count is double the table count. Howell: everyone plays everyone. Swiss: pairing is re-computed automatically after every round.</div>
     </div>
@@ -209,6 +210,10 @@ window.adminSetup=function(){
   if(rounds<1){toast('❌ Cannot compute rounds — check player count');return;}
 
   let result;
+  if(mov==='team'){
+    toast('ℹ️ Team Match seçeneği eklendi. Takım maçı hareket sistemi henüz etkin değil.');
+    return;
+  }
   if(mov==='mitchell'){result=generateMitchell(tables,bpr,phantom,totalBoards);}
   else if(mov==='howell'){result=generateHowell(tables,bpr,totalBoards);}
   else{result=generateSwissRound1(pairCount,bpr,rounds);}
