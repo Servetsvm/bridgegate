@@ -858,9 +858,11 @@ function recalcAndRender() {
 
 /* ================================ COUPON BUILDER ============================= */
 
-// Per-race overrides (included?, how many top horses to mark) for the
+// Per-race state (included?, which kulvar numbers are marked) for the
 // current dataset only — intentionally not persisted; a fresh import resets
 // it via renderAll(), since race keys/sizes may differ between files.
+// `selected` is a Set of kulvar numbers as strings; always kept non-empty
+// once a race has been rendered (defaults to the favorite).
 let couponState = { legs: {} };
 
 function renderCoupon() {
@@ -872,29 +874,38 @@ function renderCoupon() {
   if (!state.rows.length) return;
 
   const unitPrice = parseNumSmart(document.getElementById('unitPriceInput').value) || 0;
-  const defaultTopN = Math.max(1, Math.round(parseNumSmart(document.getElementById('defaultTopNInput').value) || 1));
-
   const effectiveWeights = computeEffectiveWeights(state.weights, computeEmptyCategories(state.rows));
   const groups = groupByRace(state.rows);
-  const COUPON_MAX_NUMBER = 22; // matches the paper coupon's printed number range
 
   let combos = 1;
   let anyIncluded = false;
   const summaryLines = [];
 
   groups.forEach((rows, raceKey) => {
-    if (!couponState.legs[raceKey]) couponState.legs[raceKey] = { included: true, topN: null };
-    const legState = couponState.legs[raceKey];
     const scored = computeRaceScores(rows, effectiveWeights);
-    const topN = clamp(legState.topN || defaultTopN, 1, scored.length);
-    const top = scored.slice(0, topN);
-    const markedNumbers = new Set(top.map(s => String(s.row.kulvar || '').trim()).filter(Boolean));
+    const favoriteNum = String(scored[0].row.kulvar);
+
+    if (!couponState.legs[raceKey]) {
+      couponState.legs[raceKey] = { included: true, selected: new Set([favoriteNum]) };
+    }
+    const legState = couponState.legs[raceKey];
+    if (legState.selected.size === 0) legState.selected.add(favoriteNum);
+
+    const horseByNumber = {};
+    scored.forEach(s => { horseByNumber[String(s.row.kulvar)] = s; });
+    const maxNum = Math.max(22, scored.length);
 
     const leg = document.createElement('div');
     leg.className = 'coupon-leg' + (legState.included ? '' : ' leg-off');
-    const numbersHtml = Array.from({ length: COUPON_MAX_NUMBER }, (_, i) => i + 1)
-      .map(n => `<div class="coupon-leg-number${markedNumbers.has(String(n)) ? ' marked' : ''}">${n}</div>`)
-      .join('');
+    const numbersHtml = Array.from({ length: maxNum }, (_, i) => i + 1).map(n => {
+      const key = String(n);
+      const horse = horseByNumber[key];
+      const marked = horse && legState.selected.has(key);
+      const cls = 'coupon-leg-number' + (marked ? ' marked' : '') + (horse ? ' clickable' : ' empty-slot');
+      const attrs = horse ? `data-leg="${escapeHtml(raceKey)}" data-num="${key}" title="${escapeHtml(horse.row.atIsmi)}"` : '';
+      return `<div class="${cls}" ${attrs}>${n}</div>`;
+    }).join('');
+
     leg.innerHTML = `
       <div class="coupon-leg-head">
         <label style="display:flex;align-items:center;gap:4px;justify-content:center;font-size:0.7rem;color:var(--text2);">
@@ -902,8 +913,7 @@ function renderCoupon() {
           Dahil
         </label>
         <div class="coupon-leg-title">Yarış ${escapeHtml(raceKey)}</div>
-        <input type="number" class="coupon-leg-topn" data-leg-topn="${escapeHtml(raceKey)}" min="1" max="${scored.length}" value="${topN}">
-        <div class="coupon-leg-meta">${scored.length} at</div>
+        <div class="coupon-leg-meta">${scored.length} at · ${legState.selected.size} seçili</div>
       </div>
       <div class="coupon-leg-numbers">${numbersHtml}</div>
     `;
@@ -911,9 +921,11 @@ function renderCoupon() {
 
     if (legState.included) {
       anyIncluded = true;
-      combos *= topN;
-      const names = top.map(s => `${s.row.kulvar || '?'} ${s.row.atIsmi}`).join(', ');
-      summaryLines.push(`<div class="coupon-line">Yarış ${escapeHtml(raceKey)}: <b>${topN}</b> at — ${escapeHtml(names)}</div>`);
+      const n = legState.selected.size;
+      combos *= n;
+      const chosen = scored.filter(s => legState.selected.has(String(s.row.kulvar)));
+      const names = chosen.map(s => `${s.row.kulvar} ${s.row.atIsmi}`).join(', ');
+      summaryLines.push(`<div class="coupon-line">Yarış ${escapeHtml(raceKey)}: <b>${n}</b> at — ${escapeHtml(names)}</div>`);
     }
   });
 
@@ -932,16 +944,41 @@ function renderCoupon() {
       renderCoupon();
     });
   });
-  legsEl.querySelectorAll('input[data-leg-topn]').forEach(inp => {
-    inp.addEventListener('input', () => {
-      couponState.legs[inp.dataset.legTopn].topN = Math.max(1, Math.round(Number(inp.value) || 1));
-      renderCoupon();
-    });
+  legsEl.querySelectorAll('.coupon-leg-number.clickable').forEach(el => {
+    el.addEventListener('click', () => toggleCouponNumber(el.dataset.leg, el.dataset.num));
   });
 }
 
-// Resets every included leg to 1 horse (the favorite), then repeatedly makes
-// a pass over all included legs adding one more horse — the leg's next-
+// Clicking a number in a leg marks/unmarks that specific horse — the coupon
+// always keeps at least one horse selected per leg (there's no such thing
+// as a leg with zero picks in a real combination bet).
+function toggleCouponNumber(raceKey, numStr) {
+  const leg = couponState.legs[raceKey];
+  if (!leg) return;
+  if (leg.selected.has(numStr)) {
+    if (leg.selected.size > 1) leg.selected.delete(numStr);
+  } else {
+    leg.selected.add(numStr);
+  }
+  renderCoupon();
+}
+
+function resetCouponToFavorites() {
+  if (!state.rows.length) return;
+  const effectiveWeights = computeEffectiveWeights(state.weights, computeEmptyCategories(state.rows));
+  const groups = groupByRace(state.rows);
+  groups.forEach((rows, raceKey) => {
+    const scored = computeRaceScores(rows, effectiveWeights);
+    if (!couponState.legs[raceKey]) couponState.legs[raceKey] = { included: true, selected: new Set() };
+    couponState.legs[raceKey].selected = new Set([String(scored[0].row.kulvar)]);
+  });
+  const budgetInput = document.getElementById('targetBudgetInput');
+  if (budgetInput) budgetInput.value = '';
+  renderCoupon();
+}
+
+// Resets every included leg to just its favorite, then repeatedly makes a
+// pass over all included legs adding one more horse — the leg's next-
 // highest-scored pick — to each in turn, skipping only a leg whose next
 // horse would push the total over budget. Passes repeat until a full pass
 // adds nothing. This spreads the budget evenly across every included race
@@ -953,14 +990,18 @@ function fillCouponToBudget(budget) {
   const unitPrice = parseNumSmart(document.getElementById('unitPriceInput').value) || 0;
   if (!(unitPrice > 0)) { toast('Önce geçerli bir birim ücret girin.'); return; }
 
+  const effectiveWeights = computeEffectiveWeights(state.weights, computeEmptyCategories(state.rows));
   const groups = groupByRace(state.rows);
   const raceKeys = [...groups.keys()];
-  const maxCounts = {};
-  raceKeys.forEach(raceKey => { maxCounts[raceKey] = groups.get(raceKey).length; });
+  const scoredByRace = {};
 
   raceKeys.forEach(raceKey => {
-    if (!couponState.legs[raceKey]) couponState.legs[raceKey] = { included: true, topN: null };
-    if (couponState.legs[raceKey].included) couponState.legs[raceKey].topN = 1;
+    const scored = computeRaceScores(groups.get(raceKey), effectiveWeights);
+    scoredByRace[raceKey] = scored;
+    if (!couponState.legs[raceKey]) couponState.legs[raceKey] = { included: true, selected: new Set() };
+    if (couponState.legs[raceKey].included) {
+      couponState.legs[raceKey].selected = new Set([String(scored[0].row.kulvar)]);
+    }
   });
 
   const includedKeys = raceKeys.filter(k => couponState.legs[k].included);
@@ -978,10 +1019,14 @@ function fillCouponToBudget(budget) {
     grew = false;
     for (const raceKey of includedKeys) {
       const leg = couponState.legs[raceKey];
-      if (leg.topN >= maxCounts[raceKey]) continue;
-      const candidate = (combos / leg.topN) * (leg.topN + 1);
+      const scored = scoredByRace[raceKey];
+      const n = leg.selected.size;
+      if (n >= scored.length) continue;
+      const candidate = (combos / n) * (n + 1);
       if (candidate * unitPrice > budget) continue;
-      leg.topN = leg.topN + 1;
+      const nextHorse = scored.find(s => !leg.selected.has(String(s.row.kulvar)));
+      if (!nextHorse) continue;
+      leg.selected.add(String(nextHorse.row.kulvar));
       combos = candidate;
       grew = true;
     }
@@ -1135,11 +1180,15 @@ function init() {
   document.getElementById('resetWeightsBtn').addEventListener('click', resetWeights);
   document.getElementById('exportAllBtn').addEventListener('click', exportResults);
   document.getElementById('unitPriceInput').addEventListener('input', renderCoupon);
-  document.getElementById('defaultTopNInput').addEventListener('input', () => { couponState.legs = {}; renderCoupon(); });
-  document.getElementById('couponRecalcBtn').addEventListener('click', renderCoupon);
-  document.getElementById('fillBudgetBtn').addEventListener('click', () => {
-    const budget = parseNumSmart(document.getElementById('targetBudgetInput').value) || 0;
-    fillCouponToBudget(budget);
+  document.getElementById('resetCouponBtn').addEventListener('click', resetCouponToFavorites);
+  let budgetDebounceTimer = null;
+  document.getElementById('targetBudgetInput').addEventListener('input', (e) => {
+    clearTimeout(budgetDebounceTimer);
+    const raw = e.target.value;
+    budgetDebounceTimer = setTimeout(() => {
+      const budget = parseNumSmart(raw) || 0;
+      if (budget > 0) fillCouponToBudget(budget);
+    }, 500);
   });
   document.getElementById('copySyncCodeBtn').addEventListener('click', () => {
     if (!state.syncCode) return;
