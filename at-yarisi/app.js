@@ -13,7 +13,7 @@ const FIELDS = [
   { key:'mesafe',              label:'Mesafe (m)' },
   { key:'pist',                label:'Pist' },
   { key:'zemin',               label:'Zemin' },
-  { key:'son5',                label:'Son 5 (yeniden eskiye)' },
+  { key:'son5',                label:'Son Yarışlar (yeniden eskiye, TJK "Son 6 Y." formatı: 225662)' },
   { key:'mesafeGalibiyet',     label:'Mesafe Gal.' },
   { key:'mesafeKosu',          label:'Mesafe Koşu' },
   { key:'pistGalibiyet',       label:'Pist Gal.' },
@@ -28,15 +28,15 @@ const FIELDS = [
 const ALIASES = {
   yarisNo:          ['yarisno','yaris','race','raceno','kosuno','koşuno'],
   atIsmi:           ['atismi','at','atadi','horsename','horse','name'],
-  kulvar:           ['kulvar','kulvarno','startno','no','kapıno','kapino'],
+  kulvar:           ['kulvar','kulvarno','startno','no','kapıno','kapino','n'],
   jokey:            ['jokey','jockey'],
   antrenor:         ['antrenor','trainer'],
-  kilo:             ['kilo','weight','taşıdığıkilo','tasidigikilo'],
+  kilo:             ['kilo','weight','taşıdığıkilo','tasidigikilo','sıklet','siklet'],
   hp:               ['hp','handikappuani','handicap','hendikap','hendikappuani','ratıng','rating'],
   mesafe:           ['mesafe','distance'],
   pist:             ['pist','surface','track'],
   zemin:            ['zemin','going','ground','pistdurumu'],
-  son5:             ['son5','sonsonuclar','form','last5','sonucları','sonuclari'],
+  son5:             ['son5','son6','sonsonuclar','form','last5','sonucları','sonuclari','son6y'],
   mesafeGalibiyet:  ['mesafegalibiyet','mesafegal','distwins'],
   mesafeKosu:       ['mesafekosu','mesafestart','diststarts','mesafekoşu'],
   pistGalibiyet:    ['pistgalibiyet','pistgal','surfacewins'],
@@ -45,7 +45,7 @@ const ALIASES = {
   zeminKosu:        ['zeminkosu','goingstarts','zeminkoşu'],
   jokeyWinPct:      ['jokeygalibiyetyuzde','jokeywinpct','jokeygal','jockeywin','jokeyyuzde'],
   antrenorWinPct:   ['antrenorgalibiyetyuzde','antrenorwinpct','antrenorgal','trainerwin','antrenoryuzde'],
-  ganyan:           ['ganyan','odds','oran'],
+  ganyan:           ['ganyan','odds','oran','gny'],
 };
 
 const ALIAS_LOOKUP = {};
@@ -73,8 +73,8 @@ const FUZZY_MATCHERS = [
   { field: 'pist',            kws: ['pist', 'surface', 'track'] },
   { field: 'zemin',           kws: ['zemin', 'going', 'ground'] },
   { field: 'hp',              kws: ['handikap', 'hendikap', 'rating'] },
-  { field: 'kilo',            kws: ['kilo', 'weight', 'tasidigikilo'] },
-  { field: 'son5',            kws: ['son5', 'sonsonuc', 'lastresult', 'form', 'sonucla', 'gecmis'] },
+  { field: 'kilo',            kws: ['kilo', 'weight', 'tasidigikilo', 'siklet'] },
+  { field: 'son5',            kws: ['son5', 'son6', 'sonsonuc', 'lastresult', 'form', 'sonucla', 'gecmis'] },
   { field: 'atIsmi',          kws: ['atismi', 'atadi', 'atinismi', 'atiniadi', 'hayvanismi', 'hayvanadi', 'horsename', 'horse'] },
   { field: 'kulvar',          kws: ['kulvar', 'startno', 'kapino'] },
   { field: 'yarisNo',         kws: ['yarisno', 'kosuno', 'raceno'] },
@@ -228,6 +228,13 @@ function parseNumSmart(v) {
   if (v === undefined || v === null) return NaN;
   let s = String(v).trim();
   if (s === '') return NaN;
+  // TJK "Sıklet" (weight) shows apprentice allowances as e.g. "53+0.10" — treat
+  // '+' as addition (53 + 0.10 = 53.10), not noise to strip.
+  if (s.includes('+')) {
+    const parts = s.split('+').map(p => parseNumSmart(p));
+    if (parts.some(isNaN)) return NaN;
+    return parts.reduce((a, b) => a + b, 0);
+  }
   s = s.replace(/[^0-9,.\-]/g, '');
   if (s.includes(',') && s.includes('.')) {
     const lastComma = s.lastIndexOf(','), lastDot = s.lastIndexOf('.');
@@ -240,20 +247,37 @@ function parseNumSmart(v) {
   return n;
 }
 
+// TJK's own "Son 6 Y." column packs one finish per DIGIT, contiguously
+// (e.g. "225662", or "8-22512" where '-' just marks a gap between race
+// meetings) rather than as delimited numbers — so this reads digit-by-digit,
+// not by splitting on non-digit runs. "0" is TJK's own code for "unplaced /
+// 9th or worse", not the number zero — positionPoints() special-cases it.
+// A plain hyphen-separated list like "1-2-1-4-3" still parses the same way
+// since each digit is already single-character.
 function parseSon5(v) {
   if (!v) return [];
-  return String(v).split(/[^0-9]+/).filter(Boolean).map(Number)
-    .filter(n => !isNaN(n) && n > 0).slice(0, 5);
+  const digits = String(v).match(/[0-9]/g);
+  if (!digits) return [];
+  return digits.map(Number).slice(0, 8);
 }
 
 function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
 /* ============================== SCORING ENGINE ============================== */
 
-const FORM_RECENCY_WEIGHTS = [0.36, 0.26, 0.19, 0.12, 0.07];
+// Geometrically-declining recency weights for however many results are given
+// (TJK shows 6, some sources fewer/more) — always sums to 1.
+function recencyWeights(n) {
+  const raw = [];
+  let w = 1;
+  for (let i = 0; i < n; i++) { raw.push(w); w *= 0.72; }
+  const sum = raw.reduce((a, b) => a + b, 0);
+  return raw.map(x => x / sum);
+}
 
 function positionPoints(pos) {
-  if (pos <= 1) return 100;
+  if (pos === 0) return 15;   // TJK code for "unplaced / 9th or worse", not an actual 1st place
+  if (pos === 1) return 100;
   if (pos === 2) return 85;
   if (pos === 3) return 72;
   if (pos === 4) return 60;
@@ -267,10 +291,9 @@ function positionPoints(pos) {
 function formScoreFor(row) {
   const results = parseSon5(row.son5);
   if (!results.length) return 50;
-  const w = FORM_RECENCY_WEIGHTS.slice(0, results.length);
-  const wsum = w.reduce((a, b) => a + b, 0);
+  const w = recencyWeights(results.length);
   let total = 0;
-  results.forEach((pos, i) => { total += positionPoints(pos) * (w[i] / wsum); });
+  results.forEach((pos, i) => { total += positionPoints(pos) * w[i]; });
   return Math.round(total * 10) / 10;
 }
 

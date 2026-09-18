@@ -38,6 +38,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
 .card-head h2{margin-bottom:0;}
 .hint{font-size:0.78rem;color:var(--text2);line-height:1.55;margin-bottom:14px;}
+.hint code{background:var(--surface3);padding:1px 6px;border-radius:4px;font-family:monospace;color:var(--gold2);}
 
 .dropzone{border:2px dashed var(--border2);border-radius:var(--radius);padding:30px 16px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;}
 .dropzone:hover,.dropzone.dragover{border-color:var(--gold);background:var(--golddim);}
