@@ -31,6 +31,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .tbtn{background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:7px 14px;border-radius:20px;font-size:0.78rem;cursor:pointer;font-family:inherit;transition:border-color .15s,background .15s;}
 .tbtn:hover{border-color:var(--gold);background:var(--golddim);}
 
+/* .post-coupon-row / #postCouponTools: the sample-CSV button and the sync
+   bar now live in their own card below the coupon instead of a full-width
+   strip above it — .sync-bar keeps its internal layout but drops the
+   strip-specific background/padding/border it no longer needs here. */
+.post-coupon-row{margin-bottom:14px;}
+.post-coupon-row:last-child{margin-bottom:0;}
+#postCouponTools .sync-bar{background:none;padding:0;border-bottom:none;}
 .sync-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 20px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:0.76rem;color:var(--text2);}
 .sync-label{white-space:nowrap;}
 .sync-bar code{background:var(--surface3);padding:2px 8px;border-radius:4px;color:var(--gold2);font-weight:700;letter-spacing:0.05em;}
@@ -215,11 +222,27 @@ table tr:hover td{background:var(--surface2);}
      matching the paper coupon and the desktop layout. Just narrow each card
      a bit so more fit per row on a phone screen. */
   .coupon-leg{min-width:92px;}
-  .coupon-leg-badge{font-size:0.86rem;}
-  .coupon-leg-number{font-size:0.68rem;padding:2px 1px;}
+
+  /* Roughly double every VERTICAL (not horizontal) padding/margin in the
+     sheet, so the whole coupon renders about twice as tall on a phone —
+     fitCouponToScreen (app.js) only scales it down to fit the screen WIDTH
+     now, not height, so this extra height carries straight through to the
+     page instead of being shrunk back away; the page just scrolls further,
+     same as the user asked for ("büyük yap aşağıya doğru"). Horizontal
+     sizes are left alone on purpose so the 7 columns still fit the width. */
+  .ticket-header{padding:16px 12px 14px;}
+  .ticket-title{font-size:1.1rem;margin-bottom:12px;}
+  .ticket-row{margin-bottom:10px;}
+  .ticket-chip{padding:5px 8px;font-size:0.72rem;}
+  .ticket-row-label{font-size:0.72rem;}
+  .coupon-leg-head{padding:12px 6px;}
+  .coupon-leg-badge{font-size:1.05rem;}
+  .coupon-leg-hepsi{padding:2px 6px;font-size:0.75rem;}
+  .coupon-leg-meta{font-size:0.7rem;}
+  .coupon-leg-number{font-size:0.85rem;padding:7px 1px;}
 
   /* The explanatory paragraphs aren't part of the physical paper coupon —
-     drop them on mobile so #couponFit (see fitCouponToScreen in app.js) has
-     less to shrink and the actual coupon grid stays as large as possible. */
+     drop them on mobile so the actual coupon grid stays as large as
+     possible without extra prose pushing it down. */
   #couponIntroHint,#couponBudgetHint{display:none;}
 }

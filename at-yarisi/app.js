@@ -1065,12 +1065,14 @@ function renderCoupon() {
   requestAnimationFrame(fitCouponToScreen);
 }
 
-// On phones, shrink the whole coupon (controls + every race leg + summary)
-// with a CSS transform so it all fits within one screen at once, like the
-// physical paper coupon — rather than scrolling through it. When that makes
-// the text too small to read, the user is meant to pinch-zoom in (the
-// viewport meta in index.html allows that); this is why we shrink instead of
-// just letting it overflow, and don't try to keep a "minimum readable" size.
+// .coupon-legs is nowrap (every race in one row, like the paper coupon), so
+// on a narrow screen that row is almost always wider than the card — shrink
+// the whole coupon with a CSS transform just enough to fit the screen WIDTH
+// (never height: the coupon is meant to render big and simply extend the
+// page downward, scrolling further, rather than being squeezed to fit one
+// screen). Since the scale factor is uniform, taller rows (bigger vertical
+// padding in the mobile CSS) come through as a genuinely taller coupon
+// instead of being scaled back down.
 function fitCouponToScreen() {
   const box = document.getElementById('couponFitBox');
   const inner = document.getElementById('couponFit');
@@ -1080,24 +1082,10 @@ function fitCouponToScreen() {
   inner.style.transform = 'none';
   box.style.height = '';
 
-  // .coupon-legs is nowrap (every race in one row, like the paper coupon) —
-  // on a narrow screen that row is almost always wider than the card, so we
-  // need a width-based scale-down even on desktop if there are enough races.
   const naturalHeight = inner.getBoundingClientRect().height;
   const naturalWidth = legsEl ? legsEl.scrollWidth : 0;
   const containerWidth = box.getBoundingClientRect().width;
-  const scaleByWidth = containerWidth > 0 && naturalWidth > containerWidth ? containerWidth / naturalWidth : 1;
-  let scale = scaleByWidth;
-
-  // On mobile, the whole coupon (controls + legs + summary) must also fit
-  // within one screen's height at once, like a physical sheet of paper —
-  // desktop just scrolls normally, so it only gets the width constraint.
-  if (window.innerWidth <= 720) {
-    const availableHeight = window.innerHeight - box.getBoundingClientRect().top - 12;
-    const scaleByHeight = naturalHeight > 0 ? availableHeight / naturalHeight : 1;
-    scale = Math.min(scale, scaleByHeight);
-  }
-  scale = Math.min(1, scale);
+  const scale = containerWidth > 0 && naturalWidth > containerWidth ? containerWidth / naturalWidth : 1;
 
   if (scale < 1) {
     inner.style.transform = `scale(${scale})`;

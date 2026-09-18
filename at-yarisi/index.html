@@ -22,20 +22,8 @@
     <span class="topbar-sub" id="datasetInfo"></span>
   </div>
   <div class="topbar-right">
-    <button class="tbtn" id="sampleBtn">Örnek CSV indir</button>
     <button class="tbtn" onclick="toggleTheme()">🌓</button>
   </div>
-</div>
-
-<div class="sync-bar" id="syncBar">
-  <span class="sync-label">🔄 Senkron kodu:</span>
-  <code id="syncCodeDisplay">—</code>
-  <button class="tbtn sync-copy-btn hidden" id="copySyncCodeBtn">Kopyala</button>
-  <span class="sync-status" id="syncStatus" title=""></span>
-  <span class="sync-join">
-    <input type="text" id="joinCodeInput" placeholder="Başka cihazın kodu" maxlength="6">
-    <button class="tbtn" id="joinCodeBtn">Bağlan</button>
-  </span>
 </div>
 
 <div id="app">
@@ -78,6 +66,25 @@
         </p>
         <div id="couponSummary" class="coupon-summary"></div>
       </div>
+    </div>
+  </section>
+
+  <!-- SAMPLE CSV + SYNC (informational, not the main flow — kept below the coupon;
+       always visible, same as before, since the sync "Bağlan" flow and the sample
+       file are both meant to be usable before any data is loaded too) -->
+  <section class="card" id="postCouponTools">
+    <div class="post-coupon-row">
+      <button class="tbtn" id="sampleBtn">Örnek CSV indir</button>
+    </div>
+    <div class="post-coupon-row sync-bar" id="syncBar">
+      <span class="sync-label">🔄 Senkron kodu:</span>
+      <code id="syncCodeDisplay">—</code>
+      <button class="tbtn sync-copy-btn hidden" id="copySyncCodeBtn">Kopyala</button>
+      <span class="sync-status" id="syncStatus" title=""></span>
+      <span class="sync-join">
+        <input type="text" id="joinCodeInput" placeholder="Başka cihazın kodu" maxlength="6">
+        <button class="tbtn" id="joinCodeBtn">Bağlan</button>
+      </span>
     </div>
   </section>
 
