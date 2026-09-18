@@ -41,7 +41,12 @@ let lastSeenUpdatedAt = 0;
 
 const api = {
   generateCode() {
-    return Math.random().toString(36).slice(2, 8).toUpperCase();
+    // Excludes 0/O and 1/I/L — read off a PC screen and retyped on a phone
+    // keyboard, those are easy to swap (exactly what happened in testing).
+    const chars = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
   },
 
   async push(code, data) {
