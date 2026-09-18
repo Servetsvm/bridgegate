@@ -28,11 +28,11 @@ const FIELDS = [
 const ALIASES = {
   yarisNo:          ['yarisno','yaris','race','raceno','kosuno','koşuno'],
   atIsmi:           ['atismi','at','atadi','horsename','horse','name'],
-  kulvar:           ['kulvar','kulvarno','startno','no','kapıno','kapino','n'],
+  kulvar:           ['kulvar','kulvarno','startno','no','kapıno','kapino','n','atno'],
   jokey:            ['jokey','jockey'],
   antrenor:         ['antrenor','trainer'],
   kilo:             ['kilo','weight','taşıdığıkilo','tasidigikilo','sıklet','siklet'],
-  hp:               ['hp','handikappuani','handicap','hendikap','hendikappuani','ratıng','rating'],
+  hp:               ['hp','h','handikappuani','handicap','hendikap','hendikappuani','ratıng','rating'],
   mesafe:           ['mesafe','distance'],
   pist:             ['pist','surface','track'],
   zemin:            ['zemin','going','ground','pistdurumu'],
@@ -167,47 +167,51 @@ function detectDelimiter(line) {
   return semiCount > commaCount ? ';' : ',';
 }
 
+function parseCsvLine(line, delim) {
+  const out = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; } else { inQuotes = false; }
+      } else cur += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === delim) { out.push(cur); cur = ''; }
+      else cur += c;
+    }
+  }
+  out.push(cur);
+  return out.map(s => s.trim());
+}
+
 function parseCSV(text) {
   if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
   const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim().length > 0);
   if (!lines.length) return { headers: [], rows: [] };
   const delim = detectDelimiter(lines[0]);
-
-  const parseLine = (line) => {
-    const out = [];
-    let cur = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (inQuotes) {
-        if (c === '"') {
-          if (line[i + 1] === '"') { cur += '"'; i++; } else { inQuotes = false; }
-        } else cur += c;
-      } else {
-        if (c === '"') inQuotes = true;
-        else if (c === delim) { out.push(cur); cur = ''; }
-        else cur += c;
-      }
-    }
-    out.push(cur);
-    return out.map(s => s.trim());
-  };
-
-  const headers = parseLine(lines[0]);
-  const rows = lines.slice(1).map(parseLine);
+  const headers = parseCsvLine(lines[0], delim);
+  const rows = lines.slice(1).map(l => parseCsvLine(l, delim));
   return { headers, rows };
 }
 
-function mapCSVToRows(headers, rows) {
+function mapHeaderRowToKeys(fields) {
   const matched = [];
   const unmatched = [];
-  const headerKeys = headers.map(h => {
+  const keys = fields.map(h => {
     const norm = normalizeHeader(h);
     const key = ALIAS_LOOKUP[norm] || fuzzyMatchHeader(norm);
     if (key) matched.push({ header: h, field: key });
     else if (h.trim() !== '') unmatched.push(h);
     return key;
   });
+  return { keys, matched, unmatched };
+}
+
+function mapCSVToRows(headers, rows) {
+  const { keys: headerKeys, matched, unmatched } = mapHeaderRowToKeys(headers);
 
   const mappedAll = rows.map(r => {
     const obj = {};
@@ -220,6 +224,87 @@ function mapCSVToRows(headers, rows) {
 
   const withName = mappedAll.filter(obj => obj.atIsmi && obj.atIsmi.trim() !== '');
   return { rows: withName, matched, unmatched, skipped: mappedAll.length - withName.length, totalParsed: mappedAll.length };
+}
+
+// TJK's own "CSV Program" export (the "CSV Program" link on the daily race
+// program page) is NOT a flat table — it's the PDF layout as CSV: a race
+// header line ("1. Kosu :   15.00;Maiden; 2 Yaşlı İngilizler; 57.00kg;
+// 1200m; Çim;...") holding that race's distance/surface, a prize-money
+// block, a per-race column header row ("At No;At İsmi;...;H;Son 6 Yarış;..."),
+// the horse rows, then betting-pool-type junk rows, repeated per race.
+// This scans for that shape and extracts just the horse rows, applying the
+// race's own distance/surface to every horse in it.
+const RACE_HEADER_RE = /^(\d+)\s*\.\s*Kosu\s*:/im;
+
+function isTjkProgramFormat(text) {
+  return RACE_HEADER_RE.test(text);
+}
+
+function parseTjkProgramCSV(text) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const delim = ';';
+
+  let raceNo = null;
+  let raceMesafe = '';
+  let racePist = '';
+  let headerKeys = null;
+  const allMatched = [];
+  const allUnmatched = new Set();
+  const mappedAll = [];
+
+  text.split(/\r\n|\n|\r/).forEach(rawLine => {
+    const line = rawLine.trim();
+    if (!line) return;
+
+    const raceMatch = line.match(RACE_HEADER_RE);
+    if (raceMatch) {
+      raceNo = raceMatch[1];
+      raceMesafe = '';
+      racePist = '';
+      const parts = parseCsvLine(line, delim);
+      for (let i = 0; i < parts.length; i++) {
+        const m = parts[i].match(/^(\d+)\s*m$/i);
+        if (m) {
+          raceMesafe = m[1];
+          racePist = (parts[i + 1] || '').trim();
+          break;
+        }
+      }
+      headerKeys = null; // require a fresh column-header line before trusting rows
+      return;
+    }
+
+    const fields = parseCsvLine(line, delim);
+
+    if (fields.length >= 2 && normalizeHeader(fields[0]) === 'atno' && normalizeHeader(fields[1]) === 'atismi') {
+      const { keys, matched, unmatched } = mapHeaderRowToKeys(fields);
+      headerKeys = keys;
+      if (!allMatched.length) allMatched.push(...matched);
+      unmatched.forEach(u => allUnmatched.add(u));
+      return;
+    }
+
+    if (headerKeys && /^\d+$/.test(fields[0] || '')) {
+      const obj = {};
+      FIELDS.forEach(f => { obj[f.key] = ''; });
+      headerKeys.forEach((key, i) => {
+        if (key && fields[i] !== undefined) obj[key] = fields[i];
+      });
+      if (raceNo) obj.yarisNo = raceNo;
+      if (raceMesafe) obj.mesafe = raceMesafe;
+      if (racePist) obj.pist = racePist;
+      mappedAll.push(obj);
+    }
+  });
+
+  const withName = mappedAll.filter(obj => obj.atIsmi && obj.atIsmi.trim() !== '');
+  return {
+    rows: withName,
+    matched: allMatched,
+    unmatched: [...allUnmatched],
+    skipped: mappedAll.length - withName.length,
+    totalParsed: mappedAll.length,
+  };
 }
 
 /* ============================== NUMBER HELPERS ============================= */
@@ -597,8 +682,13 @@ function handleFile(file) {
   reader.onload = () => {
     try {
       const text = decodeCSVBuffer(reader.result);
-      const { headers, rows } = parseCSV(text);
-      const result = mapCSVToRows(headers, rows);
+      let result;
+      if (isTjkProgramFormat(text)) {
+        result = parseTjkProgramCSV(text);
+      } else {
+        const { headers, rows } = parseCSV(text);
+        result = mapCSVToRows(headers, rows);
+      }
       renderImportReport(result);
       if (!result.rows.length) {
         toast('Dosyada okunabilir satır bulunamadı. Sütun başlıklarını kontrol edin.');
@@ -608,7 +698,8 @@ function handleFile(file) {
       state.fileName = file.name;
       saveState();
       renderAll();
-      toast(`${result.rows.length} at içeri aktarıldı.`);
+      const raceCount = groupByRace(result.rows).size;
+      toast(`${result.rows.length} at, ${raceCount} yarış içeri aktarıldı.`);
     } catch (e) {
       toast('Dosya okunamadı: ' + e.message);
     }
