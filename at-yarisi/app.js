@@ -82,6 +82,12 @@ const FUZZY_MATCHERS = [
 ];
 
 function fuzzyMatchHeader(norm) {
+  // A header ending in "puan"/"skor"/"score" is a computed result column
+  // (this app's own "...Puan"/"KompozitSkor" export headers included), never
+  // raw input data — without this, e.g. "KiloHendikapMesafePuan" fuzzy-
+  // matches "mesafe" and "JokeyAntrenorPuan" fuzzy-matches "jokey", silently
+  // overwriting the real column with a stray score value.
+  if (/(puan|skor|score)$/.test(norm)) return null;
   for (const m of FUZZY_MATCHERS) {
     if (m.kws.some(k => norm.includes(k))) return m.field;
   }
@@ -197,16 +203,30 @@ function parseCSV(text) {
   return { headers, rows };
 }
 
+// Each output field may be filled by at most one column. Exact alias matches
+// always win regardless of column order; a fuzzy match is only accepted for
+// a field no column has already claimed (exactly or by an earlier fuzzy
+// match) — otherwise a later, unrelated column could silently overwrite an
+// earlier, correctly-matched one.
 function mapHeaderRowToKeys(fields) {
   const matched = [];
   const unmatched = [];
-  const keys = fields.map(h => {
-    const norm = normalizeHeader(h);
-    const key = ALIAS_LOOKUP[norm] || fuzzyMatchHeader(norm);
-    if (key) matched.push({ header: h, field: key });
-    else if (h.trim() !== '') unmatched.push(h);
-    return key;
+  const keys = new Array(fields.length).fill(null);
+  const claimed = new Set();
+
+  fields.forEach((h, i) => {
+    const key = ALIAS_LOOKUP[normalizeHeader(h)];
+    if (key) { keys[i] = key; claimed.add(key); matched.push({ header: h, field: key }); }
   });
+
+  fields.forEach((h, i) => {
+    if (keys[i] !== null) return;
+    if (h.trim() === '') return;
+    const key = fuzzyMatchHeader(normalizeHeader(h));
+    if (key && !claimed.has(key)) { keys[i] = key; claimed.add(key); matched.push({ header: h, field: key }); }
+    else unmatched.push(h);
+  });
+
   return { keys, matched, unmatched };
 }
 
@@ -238,6 +258,15 @@ const RACE_HEADER_RE = /^(\d+)\s*\.\s*Kosu\s*:/im;
 
 function isTjkProgramFormat(text) {
   return RACE_HEADER_RE.test(text);
+}
+
+// "KompozitSkor" only ever appears in this app's own "Sonuçları CSV Olarak
+// İndir" export — a strong, unambiguous signal that a results file (not raw
+// TJK data) is being fed back in as input, which produces a near-empty,
+// meaningless import rather than an error, so it's worth catching explicitly.
+function isOwnResultsExport(text) {
+  const firstLine = text.split(/\r\n|\n|\r/)[0] || '';
+  return normalizeHeader(firstLine).includes('kompozitskor');
 }
 
 function parseTjkProgramCSV(text) {
@@ -740,6 +769,10 @@ function handleFile(file) {
   reader.onload = () => {
     try {
       const text = decodeCSVBuffer(reader.result);
+      if (isOwnResultsExport(text)) {
+        toast('Bu, uygulamanın ürettiği SONUÇ dosyası — girdi olarak yüklenemez. Lütfen TJK\'nın orijinal CSV Program dosyasını yükleyin.');
+        return;
+      }
       let result;
       if (isTjkProgramFormat(text)) {
         result = parseTjkProgramCSV(text);
