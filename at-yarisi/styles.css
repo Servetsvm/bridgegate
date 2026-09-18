@@ -172,7 +172,13 @@ table tr:hover td{background:var(--surface2);}
 .coupon-leg.leg-off{opacity:0.45;}
 
 .coupon-leg-head{background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 6px;flex-wrap:wrap;}
+.coupon-leg-badge-row{display:flex;align-items:center;gap:4px;}
 .coupon-leg-badge{font-family:'Playfair Display',serif;font-weight:900;font-size:0.95rem;color:#fff;}
+/* "H" (Hepsi) — marks every horse in this race at once, same as the H mark
+   printed next to each race number on the paper coupon. */
+.coupon-leg-hepsi{background:transparent;border:1px solid rgba(255,255,255,0.6);border-radius:4px;color:#fff;font-size:0.62rem;font-weight:800;padding:0 4px;line-height:1.4;cursor:pointer;font-family:inherit;}
+.coupon-leg-hepsi:hover{background:rgba(255,255,255,0.15);}
+.coupon-leg-hepsi.active{background:#fff;color:var(--red);}
 .coupon-leg-toggle{display:flex;align-items:center;gap:3px;font-size:0.62rem;color:#fff;cursor:pointer;}
 .coupon-leg-meta{width:100%;font-size:0.6rem;color:rgba(255,255,255,0.85);}
 

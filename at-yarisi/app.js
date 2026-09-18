@@ -1002,11 +1002,20 @@ function renderCoupon() {
       `<div class="coupon-leg-row">${cell(i + 1)}${cell(i + 1 + half)}</div>`
     ).join('');
 
+    // "H" (Hepsi) mirrors the paper coupon's own per-column H mark: it
+    // selects every horse in that race at once, instead of picking one by
+    // one — active whenever the current selection already covers the whole
+    // field. Clicking it again collapses back to just the favorite.
+    const allSelected = legState.selected.size === scored.length;
+
     const leg = document.createElement('div');
     leg.className = 'coupon-leg' + (legState.included ? '' : ' leg-off');
     leg.innerHTML = `
       <div class="coupon-leg-head">
-        <div class="coupon-leg-badge">${escapeHtml(raceKey)}.</div>
+        <div class="coupon-leg-badge-row">
+          <div class="coupon-leg-badge">${escapeHtml(raceKey)}.</div>
+          <button type="button" class="coupon-leg-hepsi${allSelected ? ' active' : ''}" data-leg-hepsi="${escapeHtml(raceKey)}" title="Hepsi (bu yarıştaki tüm atları işaretle)">H</button>
+        </div>
         <label class="coupon-leg-toggle">
           <input type="checkbox" data-leg-toggle="${escapeHtml(raceKey)}" ${legState.included ? 'checked' : ''}>
           Dahil
@@ -1047,6 +1056,9 @@ function renderCoupon() {
   });
   legsEl.querySelectorAll('.coupon-leg-number.clickable').forEach(el => {
     el.addEventListener('click', () => toggleCouponNumber(el.dataset.leg, el.dataset.num));
+  });
+  legsEl.querySelectorAll('button[data-leg-hepsi]').forEach(btn => {
+    btn.addEventListener('click', () => toggleHepsi(btn.dataset.legHepsi, groups.get(btn.dataset.legHepsi)));
   });
 
   requestAnimationFrame(fitCouponToScreen);
@@ -1102,6 +1114,22 @@ function toggleCouponNumber(raceKey, numStr) {
     if (leg.selected.size > 1) leg.selected.delete(numStr);
   } else {
     leg.selected.add(numStr);
+  }
+  renderCoupon();
+}
+
+// "H" (Hepsi) button on a leg: covers every horse in that race at once, or
+// — if the whole field is already selected — collapses back to just the
+// favorite, same as the paper coupon's own per-column H mark.
+function toggleHepsi(raceKey, rows) {
+  const leg = couponState.legs[raceKey];
+  if (!leg || !rows) return;
+  if (leg.selected.size === rows.length) {
+    const effectiveWeights = computeEffectiveWeights(state.weights, computeEmptyCategories(state.rows));
+    const scored = computeRaceScores(rows, effectiveWeights);
+    leg.selected = new Set([String(scored[0].row.kulvar)]);
+  } else {
+    leg.selected = new Set(rows.map(r => String(r.kulvar)));
   }
   renderCoupon();
 }
