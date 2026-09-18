@@ -833,6 +833,56 @@ function renderCoupon() {
   });
 }
 
+// Resets every included leg to 1 horse (the favorite), then repeatedly makes
+// a pass over all included legs adding one more horse — the leg's next-
+// highest-scored pick — to each in turn, skipping only a leg whose next
+// horse would push the total over budget. Passes repeat until a full pass
+// adds nothing. This spreads the budget evenly across every included race
+// (each gets a 2nd pick, then a 3rd, and so on) rather than sinking it all
+// into widening a single leg, which a pure "cheapest next combo" greedy
+// would do since growing an already-wide leg is always relatively cheaper.
+function fillCouponToBudget(budget) {
+  if (!state.rows.length || !(budget > 0)) return;
+  const unitPrice = parseNumSmart(document.getElementById('unitPriceInput').value) || 0;
+  if (!(unitPrice > 0)) { toast('Önce geçerli bir birim ücret girin.'); return; }
+
+  const groups = groupByRace(state.rows);
+  const raceKeys = [...groups.keys()];
+  const maxCounts = {};
+  raceKeys.forEach(raceKey => { maxCounts[raceKey] = groups.get(raceKey).length; });
+
+  raceKeys.forEach(raceKey => {
+    if (!couponState.legs[raceKey]) couponState.legs[raceKey] = { included: true, topN: null };
+    if (couponState.legs[raceKey].included) couponState.legs[raceKey].topN = 1;
+  });
+
+  const includedKeys = raceKeys.filter(k => couponState.legs[k].included);
+  if (!includedKeys.length) { toast('Bütçeye göre doldurmak için en az bir yarış "Dahil" olmalı.'); return; }
+
+  let combos = 1;
+  if (combos * unitPrice > budget) {
+    toast(`Bütçe tek at (1 kombinasyon × ${unitPrice} TL = ${(unitPrice).toFixed(2)} TL) için bile yetersiz.`);
+    renderCoupon();
+    return;
+  }
+
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const raceKey of includedKeys) {
+      const leg = couponState.legs[raceKey];
+      if (leg.topN >= maxCounts[raceKey]) continue;
+      const candidate = (combos / leg.topN) * (leg.topN + 1);
+      if (candidate * unitPrice > budget) continue;
+      leg.topN = leg.topN + 1;
+      combos = candidate;
+      grew = true;
+    }
+  }
+
+  renderCoupon();
+}
+
 /* ================================ FILE IMPORT ================================ */
 
 // Excel exports of Turkish data are frequently saved as Windows-1254, not UTF-8;
@@ -978,6 +1028,10 @@ function init() {
   document.getElementById('unitPriceInput').addEventListener('input', renderCoupon);
   document.getElementById('defaultTopNInput').addEventListener('input', () => { couponState.legs = {}; renderCoupon(); });
   document.getElementById('couponRecalcBtn').addEventListener('click', renderCoupon);
+  document.getElementById('fillBudgetBtn').addEventListener('click', () => {
+    const budget = parseNumSmart(document.getElementById('targetBudgetInput').value) || 0;
+    fillCouponToBudget(budget);
+  });
   renderAll();
 
   if ('serviceWorker' in navigator) {

@@ -103,6 +103,17 @@
       </label>
       <button class="btn-small" id="couponRecalcBtn">↻ Kuponu Güncelle</button>
     </div>
+    <div class="coupon-controls">
+      <label class="coupon-price-label">Hedef bütçe (TL)
+        <input type="number" id="targetBudgetInput" step="0.01" min="0" value="100">
+      </label>
+      <button class="btn-small" id="fillBudgetBtn" style="background:var(--blue);color:#0f0e0c;">💰 Bütçeye Göre Doldur</button>
+    </div>
+    <p class="hint" style="margin-top:-6px;">
+      "Bütçeye Göre Doldur": tüm dahil edilen yarışları 1 atla (favori) sıfırlar, sonra bütçeyi aşmadan her
+      seferinde kombinasyonu en az artıracak — yani favoriye en yakın skorlu — atı ekleyerek bütçeyi mümkün
+      olduğunca doldurur.
+    </p>
     <div id="couponLegs" class="coupon-legs"></div>
     <div id="couponSummary" class="coupon-summary"></div>
   </section>
