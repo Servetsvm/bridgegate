@@ -870,6 +870,18 @@ let couponState = { legs: {} };
 // more than this, whatever the day's actual race count is.
 const MAX_COUPON_LEGS = 7;
 
+// Every coupon function (render, "Sadece Favoriler", "Hedef bütçe") must
+// use this same capped set, not the full groupByRace(state.rows) — otherwise
+// a budget fill or a favorites reset can select/grow races beyond the 7
+// actually shown, which renderCoupon's own totals never count, so the
+// budget-fill loop stops early thinking it already spent money that never
+// shows up in the displayed total.
+function getCouponGroups() {
+  const allGroups = groupByRace(state.rows);
+  const cappedKeys = Array.from(allGroups.keys()).sort((a, b) => Number(a) - Number(b)).slice(0, MAX_COUPON_LEGS);
+  return new Map(cappedKeys.map(k => [k, allGroups.get(k)]));
+}
+
 // Metadata mirroring the top of the real TJK paper coupon (şehir/YD/gün/
 // bahis/misli rows). Also ephemeral like couponState — city/day/bet-type
 // are just descriptive tags for this coupon, not saved dataset fields.
@@ -970,13 +982,7 @@ function renderCoupon() {
 
   const unitPrice = parseNumSmart(document.getElementById('unitPriceInput').value) || 0;
   const effectiveWeights = computeEffectiveWeights(state.weights, computeEmptyCategories(state.rows));
-  // The physical TJK coupon has a fixed 7-column layout (7'li Ganyan is its
-  // biggest combination bet) — cap the coupon at the first 7 races so it
-  // never grows a column the real paper doesn't have. Days with more races
-  // still get evaluated in full further down; only the coupon itself caps.
-  const allGroups = groupByRace(state.rows);
-  const cappedKeys = Array.from(allGroups.keys()).sort((a, b) => Number(a) - Number(b)).slice(0, MAX_COUPON_LEGS);
-  const groups = new Map(cappedKeys.map(k => [k, allGroups.get(k)]));
+  const groups = getCouponGroups();
 
   let combos = 1;
   let anyIncluded = false;
@@ -1126,7 +1132,7 @@ function toggleHepsi(raceKey, rows) {
 function resetCouponToFavorites() {
   if (!state.rows.length) return;
   const effectiveWeights = computeEffectiveWeights(state.weights, computeEmptyCategories(state.rows));
-  const groups = groupByRace(state.rows);
+  const groups = getCouponGroups();
   groups.forEach((rows, raceKey) => {
     const scored = computeRaceScores(rows, effectiveWeights);
     if (!couponState.legs[raceKey]) couponState.legs[raceKey] = { included: true, selected: new Set() };
@@ -1151,7 +1157,7 @@ function fillCouponToBudget(budget) {
   if (!(unitPrice > 0)) { toast('Önce geçerli bir birim ücret girin.'); return; }
 
   const effectiveWeights = computeEffectiveWeights(state.weights, computeEmptyCategories(state.rows));
-  const groups = groupByRace(state.rows);
+  const groups = getCouponGroups();
   const raceKeys = [...groups.keys()];
   const scoredByRace = {};
 
