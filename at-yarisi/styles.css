@@ -156,12 +156,10 @@ table tr:hover td{background:var(--surface2);}
   .composite{grid-area:comp;}
   .horse-row .subscore{display:none;}
 
-  /* Side-by-side race legs need horizontal scroll on desktop width, but on a
-     phone that scroll has no visual affordance and reads as "missing"
-     content — stack each leg full-width instead so everything is reachable
-     by the ordinary vertical scroll the rest of the page already uses. */
-  .coupon-legs{flex-direction:column;overflow-x:visible;}
-  .coupon-leg{width:100%;}
-  .coupon-leg-numbers{display:flex;flex-direction:row;flex-wrap:wrap;justify-content:center;gap:4px;}
-  .coupon-leg-number{width:26px;}
+  /* Legs stay side-by-side (flex-wrap on .coupon-legs already handles this on
+     any width — they just wrap into narrower rows instead of one long row),
+     matching the paper coupon and the desktop layout. Just narrow each card
+     a bit so 3 fit per row on a phone screen instead of 2. */
+  .coupon-leg{min-width:78px;padding:8px 4px;}
+  .coupon-leg-title{font-size:0.68rem;}
 }
