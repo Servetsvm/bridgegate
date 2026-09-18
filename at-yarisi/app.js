@@ -54,6 +54,40 @@ Object.entries(ALIASES).forEach(([key, list]) => {
   ALIAS_LOOKUP[normalizeHeader(key)] = key;
 });
 
+// Second-pass fallback when a header doesn't exactly match an alias (real-world
+// bulletins use many header spellings). Checked in this order — more specific
+// compound keywords first so e.g. "Jokey Galibiyet %" doesn't get caught by
+// the plain "jokey" keyword before jokeyWinPct gets a chance.
+const FUZZY_MATCHERS = [
+  { field: 'jokeyWinPct',     kws: ['jokeygal', 'jokeywin', 'jokeyyuzde', 'jokeyorani'] },
+  { field: 'antrenorWinPct',  kws: ['antrenorgal', 'antrenorwin', 'antrenoryuzde', 'antrenororani'] },
+  { field: 'mesafeGalibiyet', kws: ['mesafegal', 'distwin'] },
+  { field: 'mesafeKosu',      kws: ['mesafekosu', 'mesafestart', 'diststart'] },
+  { field: 'pistGalibiyet',   kws: ['pistgal', 'surfacewin'] },
+  { field: 'pistKosu',        kws: ['pistkosu', 'surfacestart'] },
+  { field: 'zeminGalibiyet',  kws: ['zemingal', 'goingwin'] },
+  { field: 'zeminKosu',       kws: ['zeminkosu', 'goingstart'] },
+  { field: 'jokey',           kws: ['jokey', 'jockey'] },
+  { field: 'antrenor',        kws: ['antrenor', 'trainer'] },
+  { field: 'mesafe',          kws: ['mesafe', 'distance'] },
+  { field: 'pist',            kws: ['pist', 'surface', 'track'] },
+  { field: 'zemin',           kws: ['zemin', 'going', 'ground'] },
+  { field: 'hp',              kws: ['handikap', 'hendikap', 'rating'] },
+  { field: 'kilo',            kws: ['kilo', 'weight', 'tasidigikilo'] },
+  { field: 'son5',            kws: ['son5', 'sonsonuc', 'lastresult', 'form', 'sonucla', 'gecmis'] },
+  { field: 'atIsmi',          kws: ['atismi', 'atadi', 'atinismi', 'atiniadi', 'hayvanismi', 'hayvanadi', 'horsename', 'horse'] },
+  { field: 'kulvar',          kws: ['kulvar', 'startno', 'kapino'] },
+  { field: 'yarisNo',         kws: ['yarisno', 'kosuno', 'raceno'] },
+  { field: 'ganyan',          kws: ['ganyan', 'odds', 'oran'] },
+];
+
+function fuzzyMatchHeader(norm) {
+  for (const m of FUZZY_MATCHERS) {
+    if (m.kws.some(k => norm.includes(k))) return m.field;
+  }
+  return null;
+}
+
 function normalizeHeader(h) {
   return String(h || '')
     .toLowerCase()
@@ -165,15 +199,27 @@ function parseCSV(text) {
 }
 
 function mapCSVToRows(headers, rows) {
-  const headerKeys = headers.map(h => ALIAS_LOOKUP[normalizeHeader(h)] || null);
-  return rows.map(r => {
+  const matched = [];
+  const unmatched = [];
+  const headerKeys = headers.map(h => {
+    const norm = normalizeHeader(h);
+    const key = ALIAS_LOOKUP[norm] || fuzzyMatchHeader(norm);
+    if (key) matched.push({ header: h, field: key });
+    else if (h.trim() !== '') unmatched.push(h);
+    return key;
+  });
+
+  const mappedAll = rows.map(r => {
     const obj = {};
     FIELDS.forEach(f => { obj[f.key] = ''; });
     headerKeys.forEach((key, i) => {
       if (key && r[i] !== undefined) obj[key] = r[i];
     });
     return obj;
-  }).filter(obj => obj.atIsmi && obj.atIsmi.trim() !== '');
+  });
+
+  const withName = mappedAll.filter(obj => obj.atIsmi && obj.atIsmi.trim() !== '');
+  return { rows: withName, matched, unmatched, skipped: mappedAll.length - withName.length, totalParsed: mappedAll.length };
 }
 
 /* ============================== NUMBER HELPERS ============================= */
@@ -258,6 +304,9 @@ function pctScore(v) {
   return clamp(Math.round(n * 10) / 10, 0, 100);
 }
 
+function hasNum(v) { return !isNaN(parseNumSmart(v)); }
+function hasRatioData(win, starts) { const s = parseNumSmart(starts); return !isNaN(s) && s > 0; }
+
 function computeRaceScores(rows, weights) {
   const kiloScores = normalizeGroup(rows, r => parseNumSmart(r.kilo), false);
   const hpScores = normalizeGroup(rows, r => parseNumSmart(r.hp), true);
@@ -280,7 +329,12 @@ function computeRaceScores(rows, weights) {
       (form * weights.form + cat2 * weights.kilo + cat3 * weights.jokey + cat4 * weights.pist) / 100 * 10
     ) / 10;
 
-    return { row, form, cat2, cat3, cat4, composite };
+    const formPartial = parseSon5(row.son5).length === 0;
+    const cat2Partial = !(hasNum(row.kilo) && hasNum(row.hp) && hasRatioData(row.mesafeGalibiyet, row.mesafeKosu));
+    const cat3Partial = !(hasNum(row.jokeyWinPct) && hasNum(row.antrenorWinPct));
+    const cat4Partial = !(hasRatioData(row.pistGalibiyet, row.pistKosu) && hasRatioData(row.zeminGalibiyet, row.zeminKosu));
+
+    return { row, form, cat2, cat3, cat4, composite, formPartial, cat2Partial, cat3Partial, cat4Partial };
   }).sort((a, b) => b.composite - a.composite);
 }
 
@@ -436,10 +490,10 @@ function renderResults() {
         <div class="horse-name">${escapeHtml(s.row.atIsmi)}
           <small>${[s.row.kulvar && 'K' + s.row.kulvar, s.row.jokey, s.row.antrenor].filter(Boolean).map(escapeHtml).join(' · ')}</small>
         </div>
-        ${subscoreBar(s.form)}
-        ${subscoreBar(s.cat2)}
-        ${subscoreBar(s.cat3)}
-        ${subscoreBar(s.cat4)}
+        ${subscoreBar(s.form, s.formPartial)}
+        ${subscoreBar(s.cat2, s.cat2Partial)}
+        ${subscoreBar(s.cat3, s.cat3Partial)}
+        ${subscoreBar(s.cat4, s.cat4Partial)}
         <div class="composite">
           <div class="composite-val">${s.composite.toFixed(1)}</div>
           <div class="composite-bar"><div class="composite-fill" style="width:${clamp(s.composite,0,100)}%"></div></div>
@@ -452,9 +506,10 @@ function renderResults() {
   });
 }
 
-function subscoreBar(val) {
-  return `<div class="subscore">
-    <div class="subscore-val">${val.toFixed(1)}</div>
+function subscoreBar(val, partial) {
+  const title = partial ? 'Bu kriter için veri eksik; nötr (50) puan kısmen ya da tamamen varsayıldı' : '';
+  return `<div class="subscore"${title ? ` title="${title}"` : ''}>
+    <div class="subscore-val">${val.toFixed(1)}${partial ? ' <span class="miss">•</span>' : ''}</div>
     <div class="subscore-bar"><div class="subscore-fill" style="width:${clamp(val,0,100)}%"></div></div>
   </div>`;
 }
@@ -497,27 +552,64 @@ function recalcAndRender() {
 
 /* ================================ FILE IMPORT ================================ */
 
+// Excel exports of Turkish data are frequently saved as Windows-1254, not UTF-8;
+// decoding those as UTF-8 mangles ş/ğ/ı/ö/ü/ç. Decode both and keep whichever
+// produces fewer replacement characters.
+function decodeCSVBuffer(buffer) {
+  const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+  const utf8Bad = (utf8.match(/�/g) || []).length;
+  if (utf8Bad === 0) return utf8;
+  try {
+    const alt = new TextDecoder('windows-1254', { fatal: false }).decode(buffer);
+    const altBad = (alt.match(/�/g) || []).length;
+    return altBad < utf8Bad ? alt : utf8;
+  } catch (e) {
+    return utf8;
+  }
+}
+
 function handleFile(file) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      const { headers, rows } = parseCSV(String(reader.result));
-      const mapped = mapCSVToRows(headers, rows);
-      if (!mapped.length) {
+      const text = decodeCSVBuffer(reader.result);
+      const { headers, rows } = parseCSV(text);
+      const result = mapCSVToRows(headers, rows);
+      renderImportReport(result);
+      if (!result.rows.length) {
         toast('Dosyada okunabilir satır bulunamadı. Sütun başlıklarını kontrol edin.');
         return;
       }
-      state.rows = mapped;
+      state.rows = result.rows;
       state.fileName = file.name;
       saveState();
       renderAll();
-      toast(`${mapped.length} at içeri aktarıldı.`);
+      toast(`${result.rows.length} at içeri aktarıldı.`);
     } catch (e) {
       toast('Dosya okunamadı: ' + e.message);
     }
   };
-  reader.readAsText(file, 'UTF-8');
+  reader.readAsArrayBuffer(file);
+}
+
+function renderImportReport(result) {
+  const el = document.getElementById('importReport');
+  if (!el) return;
+  const parts = [];
+  if (result.unmatched.length) {
+    parts.push(`<div class="report-line report-warn">⚠ Tanınmayan sütunlar (yok sayıldı): ${result.unmatched.map(escapeHtml).join(', ')}</div>`);
+  }
+  if (result.skipped > 0) {
+    parts.push(`<div class="report-line report-warn">⚠ ${result.skipped} satır "At İsmi" sütunu boş/eşleşmediği için atlandı.</div>`);
+  }
+  if (result.matched.length) {
+    parts.push(`<div class="report-line report-ok">✓ ${result.rows.length} / ${result.totalParsed} satır aktarıldı. Eşleşen sütunlar: ${result.matched.map(m => escapeHtml(m.header)).join(', ')}</div>`);
+  } else {
+    parts.push('<div class="report-line report-warn">⚠ Hiçbir sütun tanınmadı. Başlıkları örnek CSV ile karşılaştırın.</div>');
+  }
+  el.innerHTML = parts.join('');
+  el.classList.remove('hidden');
 }
 
 function wireDropzone() {

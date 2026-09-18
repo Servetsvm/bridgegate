@@ -47,6 +47,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .field-legend{margin-top:14px;font-size:0.68rem;color:var(--text3);line-height:1.7;}
 .field-legend b{color:var(--text2);}
 
+.import-report{margin-top:14px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:0.72rem;line-height:1.7;}
+.report-line{margin-bottom:2px;}
+.report-line:last-child{margin-bottom:0;}
+.report-ok{color:var(--green);}
+.report-warn{color:var(--gold2);}
+.miss{color:var(--red);font-weight:800;}
+
 .weights-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;}
 .weight-item label{display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:6px;color:var(--text);}
 .weight-item .wval{color:var(--gold);font-weight:700;}
