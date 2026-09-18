@@ -1494,6 +1494,10 @@ function init() {
   document.getElementById('resetResultCheckBtn').addEventListener('click', () => {
     couponResults = {};
     renderResultCheck();
+    // With nothing entered yet (races not run yet), clearing changes
+    // nothing on screen — this toast is the only visible confirmation the
+    // click actually did something, so it fires unconditionally.
+    toast('Sonuçlar temizlendi.');
   });
   let budgetDebounceTimer = null;
   document.getElementById('targetBudgetInput').addEventListener('input', (e) => {
