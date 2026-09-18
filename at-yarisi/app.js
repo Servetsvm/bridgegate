@@ -671,6 +671,14 @@ function setWeight(key, newVal) {
   recalcAndRender();
 }
 
+function resetWeights() {
+  state.weights = { ...DEFAULT_WEIGHTS };
+  renderWeightsGrid();
+  saveState();
+  recalcAndRender();
+  toast('Ağırlıklar varsayılana sıfırlandı.');
+}
+
 function renderReviewTable() {
   const table = document.getElementById('reviewTable');
   table.innerHTML = '';
@@ -1124,6 +1132,7 @@ function init() {
   document.getElementById('sampleBtn').addEventListener('click', downloadSample);
   document.getElementById('recalcBtn').addEventListener('click', recalcAndRender);
   document.getElementById('addRowBtn').addEventListener('click', addEmptyRow);
+  document.getElementById('resetWeightsBtn').addEventListener('click', resetWeights);
   document.getElementById('exportAllBtn').addEventListener('click', exportResults);
   document.getElementById('unitPriceInput').addEventListener('input', renderCoupon);
   document.getElementById('defaultTopNInput').addEventListener('input', () => { couponState.legs = {}; renderCoupon(); });
