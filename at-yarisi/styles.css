@@ -179,7 +179,6 @@ table tr:hover td{background:var(--surface2);}
 .coupon-leg-hepsi{background:transparent;border:1px solid rgba(255,255,255,0.6);border-radius:4px;color:#fff;font-size:0.62rem;font-weight:800;padding:0 4px;line-height:1.4;cursor:pointer;font-family:inherit;}
 .coupon-leg-hepsi:hover{background:rgba(255,255,255,0.15);}
 .coupon-leg-hepsi.active{background:#fff;color:var(--red);}
-.coupon-leg-toggle{display:flex;align-items:center;gap:3px;font-size:0.62rem;color:#fff;cursor:pointer;}
 .coupon-leg-meta{width:100%;font-size:0.6rem;color:rgba(255,255,255,0.85);}
 
 .coupon-leg-numbers{display:flex;flex-direction:column;}

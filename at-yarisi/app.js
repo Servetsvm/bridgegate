@@ -865,6 +865,11 @@ function recalcAndRender() {
 // once a race has been rendered (defaults to the favorite).
 let couponState = { legs: {} };
 
+// The real paper coupon prints a fixed 7 race columns (its biggest
+// combination bet, 7'li Ganyan, has 7 legs) — the coupon widget never shows
+// more than this, whatever the day's actual race count is.
+const MAX_COUPON_LEGS = 7;
+
 // Metadata mirroring the top of the real TJK paper coupon (şehir/YD/gün/
 // bahis/misli rows). Also ephemeral like couponState — city/day/bet-type
 // are just descriptive tags for this coupon, not saved dataset fields.
@@ -965,7 +970,13 @@ function renderCoupon() {
 
   const unitPrice = parseNumSmart(document.getElementById('unitPriceInput').value) || 0;
   const effectiveWeights = computeEffectiveWeights(state.weights, computeEmptyCategories(state.rows));
-  const groups = groupByRace(state.rows);
+  // The physical TJK coupon has a fixed 7-column layout (7'li Ganyan is its
+  // biggest combination bet) — cap the coupon at the first 7 races so it
+  // never grows a column the real paper doesn't have. Days with more races
+  // still get evaluated in full further down; only the coupon itself caps.
+  const allGroups = groupByRace(state.rows);
+  const cappedKeys = Array.from(allGroups.keys()).sort((a, b) => Number(a) - Number(b)).slice(0, MAX_COUPON_LEGS);
+  const groups = new Map(cappedKeys.map(k => [k, allGroups.get(k)]));
 
   let combos = 1;
   let anyIncluded = false;
@@ -1016,10 +1027,6 @@ function renderCoupon() {
           <div class="coupon-leg-badge">${escapeHtml(raceKey)}.</div>
           <button type="button" class="coupon-leg-hepsi${allSelected ? ' active' : ''}" data-leg-hepsi="${escapeHtml(raceKey)}" title="Hepsi (bu yarıştaki tüm atları işaretle)">H</button>
         </div>
-        <label class="coupon-leg-toggle">
-          <input type="checkbox" data-leg-toggle="${escapeHtml(raceKey)}" ${legState.included ? 'checked' : ''}>
-          Dahil
-        </label>
         <div class="coupon-leg-meta">${scored.length} at · ${legState.selected.size} seçili</div>
       </div>
       <div class="coupon-leg-numbers">${numbersHtml}</div>
@@ -1048,12 +1055,6 @@ function renderCoupon() {
 
   renderTicketHeader(groups);
 
-  legsEl.querySelectorAll('input[data-leg-toggle]').forEach(cb => {
-    cb.addEventListener('change', () => {
-      couponState.legs[cb.dataset.legToggle].included = cb.checked;
-      renderCoupon();
-    });
-  });
   legsEl.querySelectorAll('.coupon-leg-number.clickable').forEach(el => {
     el.addEventListener('click', () => toggleCouponNumber(el.dataset.leg, el.dataset.num));
   });
