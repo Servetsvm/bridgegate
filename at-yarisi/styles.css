@@ -119,12 +119,15 @@ table tr:hover td{background:var(--surface2);}
 .composite-bar{height:6px;border-radius:3px;background:var(--surface3);overflow:hidden;margin-top:4px;}
 .composite-fill{height:100%;border-radius:3px;background:var(--gold);}
 
-/* Top info block of the real TJK paper coupon (club title, şehir/YD/gün/
-   koşu/bahis/misli rows) — same red/cream "paper" look as the race legs.
-   ŞEHİR/YD/GÜN/BAHİS are single-select tags describing this coupon; KOŞU
-   toggles are the same "Dahil" flag as each leg's own checkbox; MİSLİ is
-   a real stake multiplier folded into the total cost. */
-.ticket-header{background:#fdf6ee;border:2px solid var(--red);border-radius:8px;padding:10px 12px;margin-bottom:16px;}
+/* The real paper coupon is one continuous sheet — its info rows and its
+   number grid aren't two separate boxes. .ticket-sheet is that single
+   sheet (one background, one border); .ticket-header and .coupon-legs are
+   just its top and bottom regions, so they carry no border/background of
+   their own any more. ŞEHİR/YD/GÜN/BAHİS are single-select tags describing
+   this coupon; KOŞU toggles are the same "Dahil" flag as each leg's own
+   checkbox; MİSLİ is a real stake multiplier folded into the total cost. */
+.ticket-sheet{background:#fdf6ee;border:2px solid var(--red);border-radius:8px;overflow:hidden;margin-bottom:16px;}
+.ticket-header{padding:10px 12px 8px;border-bottom:1px solid rgba(224,90,78,0.3);}
 .ticket-title{font-family:'Playfair Display',serif;font-weight:900;font-size:1rem;color:var(--red);text-align:center;margin-bottom:8px;}
 .ticket-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
 .ticket-row:last-child{margin-bottom:0;}
@@ -148,14 +151,13 @@ table tr:hover td{background:var(--surface2);}
 .coupon-fit-box{overflow:hidden;}
 .coupon-fit{transform-origin:top left;}
 
-/* Coupon legs are styled like the real TJK paper betting slip: a small red
-   "ticket" card per race with a solid red header badge and a two-column
-   grid of numbers (1..half / half+1..max, one row per pair) instead of one
-   long vertical list — this stays a fixed cream/red "paper" look in both
-   light and dark app themes, on purpose, since it's meant to read as a
-   physical coupon embedded in the UI, not as themed app chrome. */
-.coupon-legs{display:flex;gap:10px;flex-wrap:wrap;padding-bottom:6px;}
-.coupon-leg{background:#fdf6ee;border:2px solid var(--red);border-radius:8px;overflow:hidden;min-width:108px;text-align:center;flex:0 0 auto;}
+/* Race legs are columns within the same .ticket-sheet paper, not separate
+   cards — a thin divider between columns and a small red race-number badge
+   per column, same as the paper coupon's own grid (this is why they carry
+   no border/background of their own any more; .ticket-sheet supplies both). */
+.coupon-legs{display:flex;flex-wrap:wrap;}
+.coupon-leg{border-right:1px solid rgba(224,90,78,0.3);min-width:108px;text-align:center;flex:0 0 auto;}
+.coupon-leg:last-child{border-right:none;}
 .coupon-leg.leg-off{opacity:0.45;}
 
 .coupon-leg-head{background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 6px;flex-wrap:wrap;}

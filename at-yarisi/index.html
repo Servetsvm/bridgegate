@@ -58,7 +58,10 @@
     </p>
     <div id="couponFitBox" class="coupon-fit-box">
       <div id="couponFit" class="coupon-fit">
-        <div id="ticketHeader" class="ticket-header"></div>
+        <div class="ticket-sheet">
+          <div id="ticketHeader" class="ticket-header"></div>
+          <div id="couponLegs" class="coupon-legs"></div>
+        </div>
         <div class="coupon-controls">
           <label class="coupon-price-label">Birim ücret (TL)
             <input type="number" id="unitPriceInput" step="0.01" min="0" value="1.25">
@@ -73,7 +76,6 @@
           seferinde kombinasyonu en az artıracak — yani favoriye en yakın skorlu — at otomatik eklenerek bütçe
           mümkün olduğunca doldurulur.
         </p>
-        <div id="couponLegs" class="coupon-legs"></div>
         <div id="couponSummary" class="coupon-summary"></div>
       </div>
     </div>
