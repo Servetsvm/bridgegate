@@ -955,6 +955,34 @@ function renderCoupon() {
   legsEl.querySelectorAll('.coupon-leg-number.clickable').forEach(el => {
     el.addEventListener('click', () => toggleCouponNumber(el.dataset.leg, el.dataset.num));
   });
+
+  requestAnimationFrame(fitCouponToScreen);
+}
+
+// On phones, shrink the whole coupon (controls + every race leg + summary)
+// with a CSS transform so it all fits within one screen at once, like the
+// physical paper coupon — rather than scrolling through it. When that makes
+// the text too small to read, the user is meant to pinch-zoom in (the
+// viewport meta in index.html allows that); this is why we shrink instead of
+// just letting it overflow, and don't try to keep a "minimum readable" size.
+function fitCouponToScreen() {
+  const box = document.getElementById('couponFitBox');
+  const inner = document.getElementById('couponFit');
+  if (!box || !inner) return;
+
+  if (window.innerWidth > 720) {
+    box.style.height = '';
+    inner.style.transform = '';
+    return;
+  }
+
+  inner.style.transform = 'none';
+  const naturalHeight = inner.getBoundingClientRect().height;
+  const availableHeight = window.innerHeight - box.getBoundingClientRect().top - 12;
+  const scale = naturalHeight > 0 ? Math.min(1, availableHeight / naturalHeight) : 1;
+
+  inner.style.transform = `scale(${scale})`;
+  box.style.height = (naturalHeight * scale) + 'px';
 }
 
 // Clicking a number in a leg marks/unmarks that specific horse — the coupon
@@ -1208,6 +1236,13 @@ function init() {
   renderSyncBar();
   if (state.syncCode) whenSyncReady(() => window.atYarisiSync.startPolling(state.syncCode, applyRemoteState));
   renderAll();
+
+  let resizeDebounceTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeDebounceTimer);
+    resizeDebounceTimer = setTimeout(fitCouponToScreen, 150);
+  });
+  window.addEventListener('orientationchange', () => setTimeout(fitCouponToScreen, 250));
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('service-worker.js').catch(() => {});

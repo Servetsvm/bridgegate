@@ -124,6 +124,15 @@ table tr:hover td{background:var(--surface2);}
 .coupon-price-label input{padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:0.9rem;width:150px;font-family:inherit;}
 .coupon-price-label input:focus{border-color:var(--gold);outline:none;}
 
+/* On mobile, #couponFit is scaled down by JS (see fitCouponToScreen in
+   app.js) so the whole coupon — controls, every race leg and the summary —
+   fits in one screen at once, like the physical paper coupon; the browser's
+   own pinch-zoom (re-enabled in index.html's viewport meta) is how the user
+   reads it up close when that makes it small. #couponFitBox reserves
+   exactly the scaled-down height so no blank gap is left below it. */
+.coupon-fit-box{overflow:hidden;}
+.coupon-fit{transform-origin:top left;}
+
 /* Coupon legs are styled like the real TJK paper betting slip: a small red
    "ticket" card per race with a solid red header badge and a two-column
    grid of numbers (1..half / half+1..max, one row per pair) instead of one
@@ -175,4 +184,9 @@ table tr:hover td{background:var(--surface2);}
   .coupon-leg{min-width:92px;}
   .coupon-leg-badge{font-size:0.86rem;}
   .coupon-leg-number{font-size:0.68rem;padding:2px 1px;}
+
+  /* The explanatory paragraphs aren't part of the physical paper coupon —
+     drop them on mobile so #couponFit (see fitCouponToScreen in app.js) has
+     less to shrink and the actual coupon grid stays as large as possible. */
+  #couponIntroHint,#couponBudgetHint{display:none;}
 }

@@ -2,7 +2,7 @@
 <html lang="tr" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
 <title>At Yarışı Değerlendirme · TJK</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0f0e0c">
@@ -48,7 +48,7 @@
   <!-- COUPON BUILDER (shown first — this is what a returning visit should open on) -->
   <section class="card hidden" id="couponCard">
     <h2>1 · Kupon</h2>
-    <p class="hint">
+    <p class="hint" id="couponIntroHint">
       TJK'nın çok ayaklı kombinasyon bahisleri (6'lı/7'lı Ganyan vb.) için: her ayakta (yarışta) kaç at
       işaretlerseniz, toplam kombinasyon sayısı o ayaklardaki at sayılarının çarpımıdır; ücret = kombinasyon × birim fiyat.
       Her yarış için en yüksek skorlu at otomatik işaretlenir — <b>bir numaraya tıklayarak</b> o atı kupona
@@ -56,22 +56,26 @@
       <br><b>Not:</b> Bu sadece bilgi amaçlı bir hesaplayıcıdır — oynamadan önce ücreti TJK gişesi/uygulamasında
       doğrulayın, oranlar ve kurallar güne göre değişebilir.
     </p>
-    <div class="coupon-controls">
-      <label class="coupon-price-label">Birim ücret (TL)
-        <input type="number" id="unitPriceInput" step="0.01" min="0" value="1.25">
-      </label>
-      <label class="coupon-price-label">Hedef bütçe (TL)
-        <input type="number" id="targetBudgetInput" step="0.01" min="0" placeholder="örn. 100">
-      </label>
-      <button class="btn-small" id="resetCouponBtn" style="background:var(--surface3);color:var(--text);">↺ Sadece Favoriler</button>
+    <div id="couponFitBox" class="coupon-fit-box">
+      <div id="couponFit" class="coupon-fit">
+        <div class="coupon-controls">
+          <label class="coupon-price-label">Birim ücret (TL)
+            <input type="number" id="unitPriceInput" step="0.01" min="0" value="1.25">
+          </label>
+          <label class="coupon-price-label">Hedef bütçe (TL)
+            <input type="number" id="targetBudgetInput" step="0.01" min="0" placeholder="örn. 100">
+          </label>
+          <button class="btn-small" id="resetCouponBtn" style="background:var(--surface3);color:var(--text);">↺ Sadece Favoriler</button>
+        </div>
+        <p class="hint" id="couponBudgetHint" style="margin-top:-6px;">
+          Bütçe yazdığınız anda: tüm dahil edilen yarışlar 1 atla (favori) sıfırlanır, sonra bütçeyi aşmadan her
+          seferinde kombinasyonu en az artıracak — yani favoriye en yakın skorlu — at otomatik eklenerek bütçe
+          mümkün olduğunca doldurulur.
+        </p>
+        <div id="couponLegs" class="coupon-legs"></div>
+        <div id="couponSummary" class="coupon-summary"></div>
+      </div>
     </div>
-    <p class="hint" style="margin-top:-6px;">
-      Bütçe yazdığınız anda: tüm dahil edilen yarışlar 1 atla (favori) sıfırlanır, sonra bütçeyi aşmadan her
-      seferinde kombinasyonu en az artıracak — yani favoriye en yakın skorlu — at otomatik eklenerek bütçe
-      mümkün olduğunca doldurulur.
-    </p>
-    <div id="couponLegs" class="coupon-legs"></div>
-    <div id="couponSummary" class="coupon-summary"></div>
   </section>
 
   <!-- RESULTS -->
