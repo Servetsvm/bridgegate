@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>At Yarışı Değerlendirme · TJK</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f0e0c">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="At Yarışı">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="toast"></div>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-logo">🐎 At Yarışı Değerlendirme</div>
+    <span class="topbar-sub" id="datasetInfo"></span>
+  </div>
+  <div class="topbar-right">
+    <button class="tbtn" id="sampleBtn">Örnek CSV indir</button>
+    <button class="tbtn" onclick="toggleTheme()">🌓</button>
+  </div>
+</div>
+
+<div id="app">
+
+  <!-- UPLOAD -->
+  <section class="card" id="uploadCard">
+    <h2>1 · TJK Performans Verisini Yükle</h2>
+    <p class="hint">
+      TJK'nın günlük yayınladığı performans bültenindeki bilgileri aşağıdaki sütun düzeniyle bir CSV dosyasına
+      aktarın (Excel'den "CSV UTF-8" olarak kaydedebilirsiniz) ve buradan yükleyin. Sütun sırası önemli değil,
+      başlıklar eşleştirilir. Örnek dosyayı indirip düzenleyerek başlayabilirsiniz.
+    </p>
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept=".csv,text/csv" hidden>
+      <div class="dropzone-inner">
+        <div class="dropzone-icon">📄</div>
+        <div><strong>CSV dosyasını sürükleyin</strong> ya da tıklayıp seçin</div>
+        <div class="hint">Ayırıcı olarak virgül ( , ) veya noktalı virgül ( ; ) otomatik algılanır.</div>
+      </div>
+    </div>
+    <div class="field-legend" id="fieldLegend"></div>
+  </section>
+
+  <!-- WEIGHTS -->
+  <section class="card hidden" id="weightsCard">
+    <h2>2 · Kriter Ağırlıkları</h2>
+    <p class="hint">Puanlamada her kriter grubunun etkisini ayarlayın. Toplam her zaman %100'e sabitlenir.</p>
+    <div class="weights-grid" id="weightsGrid"></div>
+  </section>
+
+  <!-- REVIEW TABLE -->
+  <section class="card hidden" id="reviewCard">
+    <div class="card-head">
+      <h2>3 · Veriyi Gözden Geçir</h2>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-small" id="addRowBtn" style="background:var(--surface3);color:var(--text);">➕ Satır Ekle</button>
+        <button class="btn-small" id="recalcBtn">↻ Yeniden Hesapla</button>
+      </div>
+    </div>
+    <p class="hint">Hücrelere tıklayıp düzeltme yapabilirsiniz. Değişiklikler otomatik kaydedilir.</p>
+    <div class="table-scroll">
+      <table id="reviewTable"></table>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section class="hidden" id="resultsSection">
+    <div class="results-head">
+      <h2>4 · Değerlendirme Sonuçları</h2>
+      <button class="btn-small" id="exportAllBtn">⬇ Tüm Sonuçları CSV Olarak İndir</button>
+    </div>
+    <div id="racesContainer"></div>
+  </section>
+
+  <div class="empty-state hidden" id="emptyState">
+    <div class="empty-icon">🏇</div>
+    <div>Henüz veri yüklenmedi. Başlamak için yukarıdan bir CSV dosyası yükleyin.</div>
+  </div>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

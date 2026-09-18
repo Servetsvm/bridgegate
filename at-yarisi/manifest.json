@@ -1,0 +1,15 @@
+{
+  "name": "At Yarışı Değerlendirme Sistemi",
+  "short_name": "At Yarışı",
+  "description": "TJK performans verilerine göre kriter bazlı at yarışı değerlendirme ve puanlama aracı.",
+  "lang": "tr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f0e0c",
+  "theme_color": "#0f0e0c",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
