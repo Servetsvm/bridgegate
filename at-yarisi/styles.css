@@ -31,6 +31,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .tbtn{background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:7px 14px;border-radius:20px;font-size:0.78rem;cursor:pointer;font-family:inherit;transition:border-color .15s,background .15s;}
 .tbtn:hover{border-color:var(--gold);background:var(--golddim);}
 
+.sync-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 20px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:0.76rem;color:var(--text2);}
+.sync-label{white-space:nowrap;}
+.sync-bar code{background:var(--surface3);padding:2px 8px;border-radius:4px;color:var(--gold2);font-weight:700;letter-spacing:0.05em;}
+.sync-status{font-size:0.9rem;}
+.sync-join{display:flex;gap:6px;margin-left:auto;}
+.sync-join input{width:120px;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.76rem;text-transform:uppercase;font-family:inherit;}
+.sync-join input:focus{border-color:var(--gold);outline:none;}
+
 #app{max-width:1100px;margin:0 auto;padding:20px 16px 60px;display:flex;flex-direction:column;gap:20px;}
 
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;}

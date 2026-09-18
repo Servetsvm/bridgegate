@@ -27,6 +27,17 @@
   </div>
 </div>
 
+<div class="sync-bar" id="syncBar">
+  <span class="sync-label">🔄 Senkron kodu:</span>
+  <code id="syncCodeDisplay">—</code>
+  <button class="tbtn sync-copy-btn hidden" id="copySyncCodeBtn">Kopyala</button>
+  <span class="sync-status" id="syncStatus" title=""></span>
+  <span class="sync-join">
+    <input type="text" id="joinCodeInput" placeholder="Başka cihazın kodu" maxlength="6">
+    <button class="tbtn" id="joinCodeBtn">Bağlan</button>
+  </span>
+</div>
+
 <div id="app">
 
   <!-- UPLOAD -->
@@ -125,6 +136,7 @@
 
 </div>
 
+<script type="module" src="firebase-sync.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

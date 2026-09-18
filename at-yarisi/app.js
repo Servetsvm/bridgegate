@@ -120,10 +120,12 @@ let state = {
   rows: [],       // array of {yarisNo, atIsmi, ... } all string values
   weights: { ...DEFAULT_WEIGHTS },
   fileName: '',
+  syncCode: '',
 };
 
 function saveState() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  pushSync();
 }
 
 function loadState() {
@@ -132,10 +134,107 @@ function loadState() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && Array.isArray(parsed.rows)) {
-        state = { rows: parsed.rows, weights: { ...DEFAULT_WEIGHTS, ...(parsed.weights || {}) }, fileName: parsed.fileName || '' };
+        state = {
+          rows: parsed.rows,
+          weights: { ...DEFAULT_WEIGHTS, ...(parsed.weights || {}) },
+          fileName: parsed.fileName || '',
+          syncCode: parsed.syncCode || '',
+        };
       }
     }
   } catch (e) {}
+}
+
+/* ================================ CROSS-DEVICE SYNC ========================= */
+
+// firebase-sync.js is a separate <script type="module"> loading the Firebase
+// SDK over the network — it may finish after this classic script has already
+// run past the point where it'd want to call into it, so every use goes
+// through this rather than assuming window.atYarisiSync exists yet.
+function whenSyncReady(fn) {
+  if (window.atYarisiSync) { fn(); return; }
+  window.addEventListener('atyarisi-sync-ready', () => fn(), { once: true });
+}
+
+let syncFailureNotified = false;
+function setSyncStatus(icon, title) {
+  const el = document.getElementById('syncStatus');
+  if (el) { el.textContent = icon; el.title = title; }
+}
+
+function pushSync() {
+  if (!state.syncCode) return;
+  whenSyncReady(() => {
+    setSyncStatus('🔄', 'Senkronize ediliyor…');
+    window.atYarisiSync.push(state.syncCode, { rows: state.rows, weights: state.weights, fileName: state.fileName }).then(ok => {
+      if (ok) {
+        setSyncStatus('🟢', 'Senkronize edildi');
+        syncFailureNotified = false;
+      } else {
+        setSyncStatus('🔴', 'Senkron başarısız — Firebase izinleri /atYarisi yoluna izin vermiyor olabilir');
+        if (!syncFailureNotified) {
+          syncFailureNotified = true;
+          toast('Senkron başarısız. Firebase güvenlik kurallarında "/atYarisi" yoluna izin verilmesi gerekebilir.');
+        }
+      }
+    });
+  });
+}
+
+// Applied when data arrives FROM another device — must not itself call
+// saveState()/pushSync(), or every incoming update would immediately be
+// pushed straight back out, updating its own timestamp and re-triggering
+// the poll on both ends forever.
+function applyRemoteState(data) {
+  if (!data) return;
+  state.rows = Array.isArray(data.rows) ? data.rows : [];
+  state.weights = { ...DEFAULT_WEIGHTS, ...(data.weights || {}) };
+  state.fileName = data.fileName || '';
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  couponState.legs = {};
+  renderAll();
+  toast('Diğer cihazdan senkronize edildi.');
+}
+
+function renderSyncBar() {
+  const codeEl = document.getElementById('syncCodeDisplay');
+  const copyBtn = document.getElementById('copySyncCodeBtn');
+  if (!codeEl) return;
+  if (state.syncCode) {
+    codeEl.textContent = state.syncCode;
+    copyBtn.classList.remove('hidden');
+  } else {
+    codeEl.textContent = '—';
+    copyBtn.classList.add('hidden');
+  }
+}
+
+function ensureSyncCode() {
+  if (state.syncCode) return;
+  state.syncCode = window.atYarisiSync ? window.atYarisiSync.generateCode() : Math.random().toString(36).slice(2, 8).toUpperCase();
+  renderSyncBar();
+  whenSyncReady(() => window.atYarisiSync.startPolling(state.syncCode, applyRemoteState));
+}
+
+function joinSyncCode(code) {
+  code = code.trim().toUpperCase();
+  if (!code) return;
+  state.syncCode = code;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  renderSyncBar();
+  whenSyncReady(() => {
+    setSyncStatus('🔄', 'Bağlanıyor…');
+    window.atYarisiSync.pull(code).then(result => {
+      if (result && result.data) {
+        applyRemoteState(result.data);
+        setSyncStatus('🟢', 'Senkronize edildi');
+      } else {
+        setSyncStatus('🟡', 'Bu kodla henüz veri yok — diğer cihaz veri yükleyince otomatik gelecek');
+        toast('Bu kodla henüz veri bulunamadı. Diğer cihazda veri yüklendiğinde otomatik olarak burada görünecek.');
+      }
+    });
+    window.atYarisiSync.startPolling(code, applyRemoteState);
+  });
 }
 
 /* ================================ THEME ==================================== */
@@ -925,6 +1024,7 @@ function handleFile(file) {
       }
       state.rows = result.rows;
       state.fileName = file.name;
+      ensureSyncCode();
       saveState();
       renderAll();
       const raceCount = groupByRace(result.rows).size;
@@ -1032,6 +1132,15 @@ function init() {
     const budget = parseNumSmart(document.getElementById('targetBudgetInput').value) || 0;
     fillCouponToBudget(budget);
   });
+  document.getElementById('copySyncCodeBtn').addEventListener('click', () => {
+    if (!state.syncCode) return;
+    navigator.clipboard?.writeText(state.syncCode).then(() => toast('Kod kopyalandı.')).catch(() => {});
+  });
+  document.getElementById('joinCodeBtn').addEventListener('click', () => {
+    joinSyncCode(document.getElementById('joinCodeInput').value);
+  });
+  renderSyncBar();
+  if (state.syncCode) whenSyncReady(() => window.atYarisiSync.startPolling(state.syncCode, applyRemoteState));
   renderAll();
 
   if ('serviceWorker' in navigator) {
