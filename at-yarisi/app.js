@@ -730,19 +730,107 @@ function renderAll() {
   document.getElementById('weightsCard').classList.toggle('hidden', !has);
   document.getElementById('reviewCard').classList.toggle('hidden', !has);
   document.getElementById('resultsSection').classList.toggle('hidden', !has);
+  document.getElementById('couponCard').classList.toggle('hidden', !has);
   document.getElementById('emptyState').classList.toggle('hidden', has);
 
   renderDatasetInfo();
   if (has) {
+    couponState.legs = {}; // new dataset — discard any previous per-race overrides
     renderWeightsGrid();
     renderReviewTable();
     renderResults();
+    renderCoupon();
   }
 }
 
 function recalcAndRender() {
   renderDatasetInfo();
   renderResults();
+  renderCoupon();
+}
+
+/* ================================ COUPON BUILDER ============================= */
+
+// Per-race overrides (included?, how many top horses to mark) for the
+// current dataset only — intentionally not persisted; a fresh import resets
+// it via renderAll(), since race keys/sizes may differ between files.
+let couponState = { legs: {} };
+
+function renderCoupon() {
+  const legsEl = document.getElementById('couponLegs');
+  const summaryEl = document.getElementById('couponSummary');
+  if (!legsEl || !summaryEl) return;
+  legsEl.innerHTML = '';
+  summaryEl.innerHTML = '';
+  if (!state.rows.length) return;
+
+  const unitPrice = parseNumSmart(document.getElementById('unitPriceInput').value) || 0;
+  const defaultTopN = Math.max(1, Math.round(parseNumSmart(document.getElementById('defaultTopNInput').value) || 1));
+
+  const effectiveWeights = computeEffectiveWeights(state.weights, computeEmptyCategories(state.rows));
+  const groups = groupByRace(state.rows);
+  const COUPON_MAX_NUMBER = 22; // matches the paper coupon's printed number range
+
+  let combos = 1;
+  let anyIncluded = false;
+  const summaryLines = [];
+
+  groups.forEach((rows, raceKey) => {
+    if (!couponState.legs[raceKey]) couponState.legs[raceKey] = { included: true, topN: null };
+    const legState = couponState.legs[raceKey];
+    const scored = computeRaceScores(rows, effectiveWeights);
+    const topN = clamp(legState.topN || defaultTopN, 1, scored.length);
+    const top = scored.slice(0, topN);
+    const markedNumbers = new Set(top.map(s => String(s.row.kulvar || '').trim()).filter(Boolean));
+
+    const leg = document.createElement('div');
+    leg.className = 'coupon-leg' + (legState.included ? '' : ' leg-off');
+    const numbersHtml = Array.from({ length: COUPON_MAX_NUMBER }, (_, i) => i + 1)
+      .map(n => `<div class="coupon-leg-number${markedNumbers.has(String(n)) ? ' marked' : ''}">${n}</div>`)
+      .join('');
+    leg.innerHTML = `
+      <div class="coupon-leg-head">
+        <label style="display:flex;align-items:center;gap:4px;justify-content:center;font-size:0.7rem;color:var(--text2);">
+          <input type="checkbox" data-leg-toggle="${escapeHtml(raceKey)}" ${legState.included ? 'checked' : ''}>
+          Dahil
+        </label>
+        <div class="coupon-leg-title">Yarış ${escapeHtml(raceKey)}</div>
+        <input type="number" class="coupon-leg-topn" data-leg-topn="${escapeHtml(raceKey)}" min="1" max="${scored.length}" value="${topN}">
+        <div class="coupon-leg-meta">${scored.length} at</div>
+      </div>
+      <div class="coupon-leg-numbers">${numbersHtml}</div>
+    `;
+    legsEl.appendChild(leg);
+
+    if (legState.included) {
+      anyIncluded = true;
+      combos *= topN;
+      const names = top.map(s => `${s.row.kulvar || '?'} ${s.row.atIsmi}`).join(', ');
+      summaryLines.push(`<div class="coupon-line">Yarış ${escapeHtml(raceKey)}: <b>${topN}</b> at — ${escapeHtml(names)}</div>`);
+    }
+  });
+
+  const totalCombos = anyIncluded ? combos : 0;
+  const totalCost = totalCombos * unitPrice;
+
+  summaryEl.innerHTML = `
+    ${summaryLines.join('')}
+    <div class="coupon-line" style="margin-top:8px;">Toplam kombinasyon: <b>${totalCombos}</b></div>
+    <div class="coupon-total">Toplam ücret: ${totalCost.toFixed(2)} TL</div>
+  `;
+
+  legsEl.querySelectorAll('input[data-leg-toggle]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      couponState.legs[cb.dataset.legToggle].included = cb.checked;
+      renderCoupon();
+    });
+  });
+  legsEl.querySelectorAll('input[data-leg-topn]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      couponState.legs[inp.dataset.legTopn].topN = Math.max(1, Math.round(Number(inp.value) || 1));
+      renderCoupon();
+    });
+  });
 }
 
 /* ================================ FILE IMPORT ================================ */
@@ -887,6 +975,9 @@ function init() {
   document.getElementById('recalcBtn').addEventListener('click', recalcAndRender);
   document.getElementById('addRowBtn').addEventListener('click', addEmptyRow);
   document.getElementById('exportAllBtn').addEventListener('click', exportResults);
+  document.getElementById('unitPriceInput').addEventListener('input', renderCoupon);
+  document.getElementById('defaultTopNInput').addEventListener('input', () => { couponState.legs = {}; renderCoupon(); });
+  document.getElementById('couponRecalcBtn').addEventListener('click', renderCoupon);
   renderAll();
 
   if ('serviceWorker' in navigator) {

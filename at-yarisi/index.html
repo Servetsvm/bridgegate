@@ -83,6 +83,30 @@
     <div id="racesContainer"></div>
   </section>
 
+  <!-- COUPON BUILDER -->
+  <section class="card hidden" id="couponCard">
+    <h2>5 · Kupon Oluştur</h2>
+    <p class="hint">
+      TJK'nın çok ayaklı kombinasyon bahisleri (6'lı/7'lı Ganyan vb.) için: her ayakta (yarışta) kaç at
+      işaretlerseniz, toplam kombinasyon sayısı o ayaklardaki at sayılarının çarpımıdır; ücret = kombinasyon × birim fiyat.
+      Aşağıda her yarış için en yüksek skorlu atlar otomatik işaretlenir, isterseniz ayak sayısını değiştirin veya
+      bir yarışı kupon dışı bırakın.
+      <br><b>Not:</b> Bu sadece bilgi amaçlı bir hesaplayıcıdır — oynamadan önce ücreti TJK gişesi/uygulamasında
+      doğrulayın, oranlar ve kurallar güne göre değişebilir.
+    </p>
+    <div class="coupon-controls">
+      <label class="coupon-price-label">Birim ücret (TL)
+        <input type="number" id="unitPriceInput" step="0.01" min="0" value="1.25">
+      </label>
+      <label class="coupon-price-label">Ayak başına varsayılan at sayısı
+        <input type="number" id="defaultTopNInput" step="1" min="1" value="1">
+      </label>
+      <button class="btn-small" id="couponRecalcBtn">↻ Kuponu Güncelle</button>
+    </div>
+    <div id="couponLegs" class="coupon-legs"></div>
+    <div id="couponSummary" class="coupon-summary"></div>
+  </section>
+
   <div class="empty-state hidden" id="emptyState">
     <div class="empty-icon">🏇</div>
     <div>Henüz veri yüklenmedi. Başlamak için yukarıdan bir CSV dosyası yükleyin.</div>
