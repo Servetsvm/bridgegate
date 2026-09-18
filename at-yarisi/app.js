@@ -1061,21 +1061,35 @@ function renderCoupon() {
 function fitCouponToScreen() {
   const box = document.getElementById('couponFitBox');
   const inner = document.getElementById('couponFit');
+  const legsEl = document.getElementById('couponLegs');
   if (!box || !inner) return;
 
-  if (window.innerWidth > 720) {
-    box.style.height = '';
-    inner.style.transform = '';
-    return;
-  }
-
   inner.style.transform = 'none';
-  const naturalHeight = inner.getBoundingClientRect().height;
-  const availableHeight = window.innerHeight - box.getBoundingClientRect().top - 12;
-  const scale = naturalHeight > 0 ? Math.min(1, availableHeight / naturalHeight) : 1;
+  box.style.height = '';
 
-  inner.style.transform = `scale(${scale})`;
-  box.style.height = (naturalHeight * scale) + 'px';
+  // .coupon-legs is nowrap (every race in one row, like the paper coupon) —
+  // on a narrow screen that row is almost always wider than the card, so we
+  // need a width-based scale-down even on desktop if there are enough races.
+  const naturalHeight = inner.getBoundingClientRect().height;
+  const naturalWidth = legsEl ? legsEl.scrollWidth : 0;
+  const containerWidth = box.getBoundingClientRect().width;
+  const scaleByWidth = containerWidth > 0 && naturalWidth > containerWidth ? containerWidth / naturalWidth : 1;
+  let scale = scaleByWidth;
+
+  // On mobile, the whole coupon (controls + legs + summary) must also fit
+  // within one screen's height at once, like a physical sheet of paper —
+  // desktop just scrolls normally, so it only gets the width constraint.
+  if (window.innerWidth <= 720) {
+    const availableHeight = window.innerHeight - box.getBoundingClientRect().top - 12;
+    const scaleByHeight = naturalHeight > 0 ? availableHeight / naturalHeight : 1;
+    scale = Math.min(scale, scaleByHeight);
+  }
+  scale = Math.min(1, scale);
+
+  if (scale < 1) {
+    inner.style.transform = `scale(${scale})`;
+    box.style.height = (naturalHeight * scale) + 'px';
+  }
 }
 
 // Clicking a number in a leg marks/unmarks that specific horse — the coupon

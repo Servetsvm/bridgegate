@@ -126,7 +126,14 @@ table tr:hover td{background:var(--surface2);}
    their own any more. ŞEHİR/YD/GÜN/BAHİS are single-select tags describing
    this coupon; KOŞU toggles are the same "Dahil" flag as each leg's own
    checkbox; MİSLİ is a real stake multiplier folded into the total cost. */
-.ticket-sheet{background:#fdf6ee;border:2px solid var(--red);border-radius:8px;overflow:hidden;margin-bottom:16px;}
+/* display:inline-block makes the sheet size itself to its widest row (the
+   nowrap race columns), instead of capping at 100% of its own container and
+   clipping the overflow via its own overflow:hidden — that clipped away the
+   last race column(s) whenever the (uncapped) row was wider than the card.
+   The real width limit is #couponFitBox further up, which fitCouponToScreen
+   (app.js) accounts for by scaling #couponFit down when this sheet ends up
+   wider than the screen. */
+.ticket-sheet{display:inline-block;width:max-content;max-width:none;background:#fdf6ee;border:2px solid var(--red);border-radius:8px;overflow:hidden;margin-bottom:16px;}
 .ticket-header{padding:10px 12px 8px;border-bottom:1px solid rgba(224,90,78,0.3);}
 .ticket-title{font-family:'Playfair Display',serif;font-weight:900;font-size:1rem;color:var(--red);text-align:center;margin-bottom:8px;}
 .ticket-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
@@ -154,8 +161,12 @@ table tr:hover td{background:var(--surface2);}
 /* Race legs are columns within the same .ticket-sheet paper, not separate
    cards — a thin divider between columns and a small red race-number badge
    per column, same as the paper coupon's own grid (this is why they carry
-   no border/background of their own any more; .ticket-sheet supplies both). */
-.coupon-legs{display:flex;flex-wrap:wrap;}
+   no border/background of their own any more; .ticket-sheet supplies both).
+   nowrap keeps every race in a single row exactly like the photo (never a
+   second row of columns below) — fitCouponToScreen (app.js) shrinks the
+   whole sheet down with a transform when that row would otherwise be wider
+   than the screen. */
+.coupon-legs{display:flex;flex-wrap:nowrap;width:max-content;}
 .coupon-leg{border-right:1px solid rgba(224,90,78,0.3);min-width:108px;text-align:center;flex:0 0 auto;}
 .coupon-leg:last-child{border-right:none;}
 .coupon-leg.leg-off{opacity:0.45;}
