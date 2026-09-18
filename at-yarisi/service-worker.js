@@ -1,4 +1,4 @@
-const CACHE_NAME = 'at-yarisi-v2';
+const CACHE_NAME = 'at-yarisi-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -27,10 +27,14 @@ self.addEventListener('activate', (event) => {
 // always prefer the live file when online; a cache-first strategy here left
 // updated code invisible to returning users even after a hard refresh, since
 // the browser's own reload bypasses HTTP cache but not the service worker.
+// { cache: 'no-store' } is required too: a plain fetch() still honors the
+// ordinary HTTP cache, so GitHub Pages' own Cache-Control headers could
+// serve a stale app.js from the browser's HTTP cache even though this
+// handler was "going to the network" — no-store forces an actual round trip.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   event.respondWith(
-    fetch(event.request).then((res) => {
+    fetch(event.request, { cache: 'no-store' }).then((res) => {
       if (res && res.status === 200 && res.type === 'basic') {
         const resClone = res.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone));
