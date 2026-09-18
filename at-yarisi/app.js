@@ -121,11 +121,34 @@ let state = {
   weights: { ...DEFAULT_WEIGHTS },
   fileName: '',
   syncCode: '',
+  // The coupon (bahis type/misli/inclusion/marked horses, birim ücret, hedef
+  // bütçe) persists across reloads just like the dataset does — the user
+  // wants the page to open exactly as they left it until they upload a new
+  // CSV or reset it themselves, not snap back to defaults every visit.
+  couponMeta: null,
+  couponLegs: null,
+  unitPrice: '1.25',
+  targetBudget: '',
 };
 
 function saveState() {
+  state.couponMeta = couponMeta;
+  state.couponLegs = serializeCouponLegs();
+  const unitPriceEl = document.getElementById('unitPriceInput');
+  const targetBudgetEl = document.getElementById('targetBudgetInput');
+  if (unitPriceEl) state.unitPrice = unitPriceEl.value;
+  if (targetBudgetEl) state.targetBudget = targetBudgetEl.value;
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
   pushSync();
+}
+
+// renderCoupon() runs on nearly every keystroke/click in the coupon (unit
+// price typing included), so save on a short debounce instead of every call
+// — still lands well within the time it'd take anyone to close the tab.
+let saveCouponDebounceTimer = null;
+function debouncedSaveCoupon() {
+  clearTimeout(saveCouponDebounceTimer);
+  saveCouponDebounceTimer = setTimeout(saveState, 400);
 }
 
 function loadState() {
@@ -139,10 +162,40 @@ function loadState() {
           weights: { ...DEFAULT_WEIGHTS, ...(parsed.weights || {}) },
           fileName: parsed.fileName || '',
           syncCode: parsed.syncCode || '',
+          couponMeta: parsed.couponMeta || null,
+          couponLegs: parsed.couponLegs || null,
+          unitPrice: parsed.unitPrice || '1.25',
+          targetBudget: parsed.targetBudget || '',
         };
+        restoreCouponFromState();
       }
     }
   } catch (e) {}
+}
+
+// Shared by loadState() (this device, localStorage) and applyRemoteState()
+// (another device, via Firebase sync) — both hand it the same saved shape.
+function serializeCouponLegs() {
+  const out = {};
+  Object.keys(couponState.legs).forEach(raceKey => {
+    const leg = couponState.legs[raceKey];
+    out[raceKey] = { included: !!leg.included, selected: Array.from(leg.selected) };
+  });
+  return out;
+}
+
+function restoreCouponFromState() {
+  couponMeta = { city: null, yd: 1, gun: null, bahis: '6G', misli: 1, ...(state.couponMeta || {}) };
+  couponState = { legs: {} };
+  const savedLegs = state.couponLegs || {};
+  Object.keys(savedLegs).forEach(raceKey => {
+    const leg = savedLegs[raceKey] || {};
+    couponState.legs[raceKey] = { included: !!leg.included, selected: new Set(leg.selected || []) };
+  });
+  const unitPriceEl = document.getElementById('unitPriceInput');
+  const targetBudgetEl = document.getElementById('targetBudgetInput');
+  if (unitPriceEl) unitPriceEl.value = state.unitPrice || '1.25';
+  if (targetBudgetEl) targetBudgetEl.value = state.targetBudget || '';
 }
 
 /* ================================ CROSS-DEVICE SYNC ========================= */
@@ -166,7 +219,11 @@ function pushSync() {
   if (!state.syncCode) return;
   whenSyncReady(() => {
     setSyncStatus('🔄', 'Senkronize ediliyor…');
-    window.atYarisiSync.push(state.syncCode, { rows: state.rows, weights: state.weights, fileName: state.fileName }).then(ok => {
+    window.atYarisiSync.push(state.syncCode, {
+      rows: state.rows, weights: state.weights, fileName: state.fileName,
+      couponMeta: state.couponMeta, couponLegs: state.couponLegs,
+      unitPrice: state.unitPrice, targetBudget: state.targetBudget,
+    }).then(ok => {
       if (ok) {
         setSyncStatus('🟢', 'Senkronize edildi');
         syncFailureNotified = false;
@@ -190,8 +247,12 @@ function applyRemoteState(data) {
   state.rows = Array.isArray(data.rows) ? data.rows : [];
   state.weights = { ...DEFAULT_WEIGHTS, ...(data.weights || {}) };
   state.fileName = data.fileName || '';
+  state.couponMeta = data.couponMeta || null;
+  state.couponLegs = data.couponLegs || null;
+  state.unitPrice = data.unitPrice || '1.25';
+  state.targetBudget = data.targetBudget || '';
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
-  couponState.legs = {};
+  restoreCouponFromState();
   renderAll();
   toast('Diğer cihazdan senkronize edildi.');
 }
@@ -842,7 +903,10 @@ function renderAll() {
 
   renderDatasetInfo();
   if (has) {
-    couponState.legs = {}; // new dataset — discard any previous per-race overrides
+    // Note: couponState is intentionally NOT reset here — callers that need
+    // a fresh coupon (a brand-new CSV import) reset it themselves before
+    // calling renderAll(); callers restoring a saved/synced coupon (loadState,
+    // applyRemoteState) need it to survive into renderCoupon() below.
     renderWeightsGrid();
     renderReviewTable();
     renderResults();
@@ -1069,6 +1133,7 @@ function renderCoupon() {
   });
 
   renderResultCheck();
+  debouncedSaveCoupon();
   requestAnimationFrame(fitCouponToScreen);
 }
 
@@ -1308,11 +1373,23 @@ function handleFile(file) {
       state.rows = result.rows;
       state.fileName = file.name;
       couponState = { legs: {} };
-      couponMeta = { city: null, yd: 1, gun: null, bahis: null, misli: 1 };
+      // Defaults to 6'lı Ganyan (the user's stated normal play) on every
+      // fresh import — "Hedef bütçe" alone is then enough to build a coupon,
+      // no extra click needed. A saved/synced coupon overrides this via
+      // restoreCouponFromState(), never through this fresh-import path.
+      couponMeta = { city: null, yd: 1, gun: null, bahis: '6G', misli: 1 };
       couponResults = {};
+      const targetBudgetEl = document.getElementById('targetBudgetInput');
+      if (targetBudgetEl) targetBudgetEl.value = '';
       ensureSyncCode();
-      saveState();
       renderAll();
+      // renderCoupon() (inside renderAll) just lazily included every race by
+      // default — now apply what "6G" actually means (last 6 races only),
+      // same as clicking the chip by hand would.
+      const sortedKeys = Array.from(getCouponGroups().keys()).sort((a, b) => Number(a) - Number(b));
+      selectLastNRaces(6, sortedKeys);
+      renderCoupon();
+      saveState();
       const raceCount = groupByRace(result.rows).size;
       toast(`${result.rows.length} at, ${raceCount} yarış içeri aktarıldı.`);
     } catch (e) {
