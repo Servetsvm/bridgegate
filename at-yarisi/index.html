@@ -69,6 +69,24 @@
     </div>
   </section>
 
+  <!-- COUPON RESULT CHECK — races have no TJK results API we can call from a
+       static site (no CORS, needs a paid backend), so this is manual: enter
+       each included race's actual winner once it's run, we compare against
+       the marked picks. -->
+  <section class="card hidden" id="resultCheckCard">
+    <div class="card-head">
+      <h2>2 · Kupon Sonucu</h2>
+      <button class="btn-small" id="resetResultCheckBtn" style="background:var(--surface3);color:var(--text);">↺ Sonuçları Temizle</button>
+    </div>
+    <p class="hint">
+      Yarışlar bittikten sonra her yarışın kazanan at numarasını (TJK gişesi/TV/siteden bakarak) aşağıya girin —
+      kuponunuzun tutup tutmadığını hemen görün. Bir ayak tutmazsa kombinasyon kaybeder; kalan ayakları
+      girmeseniz de sonuç artık bellidir.
+    </p>
+    <div id="resultCheckLegs" class="result-check-legs"></div>
+    <div id="resultCheckOutcome" class="result-check-outcome"></div>
+  </section>
+
   <!-- SAMPLE CSV + SYNC (informational, not the main flow — kept below the coupon;
        always visible, same as before, since the sync "Bağlan" flow and the sample
        file are both meant to be usable before any data is loaded too) -->
@@ -91,7 +109,7 @@
   <!-- RESULTS -->
   <section class="hidden" id="resultsSection">
     <div class="results-head">
-      <h2>2 · Değerlendirme Sonuçları</h2>
+      <h2>3 · Değerlendirme Sonuçları</h2>
       <button class="btn-small" id="exportAllBtn">⬇ Tüm Sonuçları CSV Olarak İndir</button>
     </div>
     <div id="resultsLegend" class="results-legend"></div>
@@ -100,7 +118,7 @@
 
   <!-- UPLOAD -->
   <section class="card" id="uploadCard">
-    <h2>3 · TJK Performans Verisini Yükle</h2>
+    <h2>4 · TJK Performans Verisini Yükle</h2>
     <p class="hint">
       TJK'nın günlük yayınladığı performans bültenindeki bilgileri aşağıdaki sütun düzeniyle bir CSV dosyasına
       aktarın (Excel'den "CSV UTF-8" olarak kaydedebilirsiniz) ve buradan yükleyin. Sütun sırası önemli değil,
@@ -123,7 +141,7 @@
   <!-- WEIGHTS -->
   <section class="card hidden" id="weightsCard">
     <div class="card-head">
-      <h2>4 · Kriter Ağırlıkları</h2>
+      <h2>5 · Kriter Ağırlıkları</h2>
       <button class="btn-small" id="resetWeightsBtn" style="background:var(--surface3);color:var(--text);">↺ Varsayılana Sıfırla</button>
     </div>
     <p class="hint">Puanlamada her kriter grubunun etkisini ayarlayın. Toplam her zaman %100'e sabitlenir.</p>
@@ -133,7 +151,7 @@
   <!-- REVIEW TABLE -->
   <section class="card hidden" id="reviewCard">
     <div class="card-head">
-      <h2>5 · Veriyi Gözden Geçir</h2>
+      <h2>6 · Veriyi Gözden Geçir</h2>
       <div style="display:flex;gap:8px;">
         <button class="btn-small" id="addRowBtn" style="background:var(--surface3);color:var(--text);">➕ Satır Ekle</button>
         <button class="btn-small" id="recalcBtn">↻ Yeniden Hesapla</button>

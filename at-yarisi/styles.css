@@ -208,6 +208,22 @@ table tr:hover td{background:var(--surface2);}
 .coupon-summary .coupon-total{font-size:1.2rem;font-weight:800;color:var(--gold);font-family:'Playfair Display',serif;}
 .coupon-summary .coupon-line{margin-bottom:4px;font-size:0.76rem;color:var(--text2);}
 
+/* Manual result check: no TJK results API is reachable from a static site
+   (no CORS, would need a paid backend) — the user enters each race's actual
+   winner themselves once it's run, and we compare that against their picks. */
+.result-check-legs{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px;}
+.result-check-leg{display:flex;flex-direction:column;gap:4px;min-width:150px;}
+.result-check-leg-title{font-size:0.76rem;font-weight:700;color:var(--text2);}
+.result-check-leg select{padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:0.82rem;font-family:inherit;}
+.result-check-leg select:focus{border-color:var(--gold);outline:none;}
+.result-banner{padding:12px 16px;border-radius:var(--radius-sm);font-weight:800;font-size:1.05rem;margin-bottom:10px;font-family:'Playfair Display',serif;}
+.result-banner.win{background:var(--greendim);color:var(--green);border:1px solid rgba(76,175,125,0.4);}
+.result-banner.lose{background:var(--reddim);color:var(--red);border:1px solid rgba(224,90,78,0.4);}
+.result-banner.pending{background:var(--surface2);color:var(--text2);border:1px solid var(--border);}
+.result-line{font-size:0.82rem;color:var(--text2);padding:4px 0;}
+.result-line.hit{color:var(--green);}
+.result-line.miss{color:var(--red);}
+
 .empty-state{text-align:center;padding:60px 20px;color:var(--text2);display:flex;flex-direction:column;align-items:center;gap:10px;}
 .empty-icon{font-size:2.4rem;}
 

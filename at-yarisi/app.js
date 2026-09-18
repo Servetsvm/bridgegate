@@ -1068,6 +1068,7 @@ function renderCoupon() {
     btn.addEventListener('click', () => toggleHepsi(btn.dataset.legHepsi, groups.get(btn.dataset.legHepsi)));
   });
 
+  renderResultCheck();
   requestAnimationFrame(fitCouponToScreen);
 }
 
@@ -1201,6 +1202,69 @@ function fillCouponToBudget(budget) {
   renderCoupon();
 }
 
+// Winner (kulvar, as a string) the user entered per race, once it's run —
+// ephemeral like couponState, cleared on a fresh import. There is no
+// reachable TJK results API from a static site (no CORS; would need a paid
+// backend), so this is the only way to check whether a coupon hit.
+let couponResults = {};
+
+function renderResultCheck() {
+  const card = document.getElementById('resultCheckCard');
+  const legsEl = document.getElementById('resultCheckLegs');
+  const outcomeEl = document.getElementById('resultCheckOutcome');
+  if (!card || !legsEl || !outcomeEl) return;
+
+  const groups = getCouponGroups();
+  const includedKeys = Array.from(groups.keys()).filter(k => couponState.legs[k] && couponState.legs[k].included);
+  card.classList.toggle('hidden', includedKeys.length === 0);
+  if (!includedKeys.length) return;
+
+  legsEl.innerHTML = includedKeys.map(raceKey => {
+    const rows = groups.get(raceKey);
+    const sorted = [...rows].sort((a, b) => Number(a.kulvar) - Number(b.kulvar));
+    const options = sorted.map(r => `<option value="${escapeHtml(String(r.kulvar))}">${escapeHtml(String(r.kulvar))} — ${escapeHtml(r.atIsmi)}</option>`).join('');
+    return `
+      <div class="result-check-leg">
+        <div class="result-check-leg-title">Yarış ${escapeHtml(raceKey)}</div>
+        <select data-result-race="${escapeHtml(raceKey)}">
+          <option value="">— Kazananı seçin —</option>
+          ${options}
+        </select>
+      </div>`;
+  }).join('');
+
+  legsEl.querySelectorAll('select[data-result-race]').forEach(sel => {
+    sel.value = couponResults[sel.dataset.resultRace] || '';
+    sel.addEventListener('change', () => {
+      couponResults[sel.dataset.resultRace] = sel.value || null;
+      renderResultCheck();
+    });
+  });
+
+  let anyMiss = false;
+  const lines = includedKeys.map(raceKey => {
+    const winner = couponResults[raceKey];
+    if (!winner) return `<div class="result-line">⏳ Yarış ${escapeHtml(raceKey)}: henüz girilmedi</div>`;
+    const hit = couponState.legs[raceKey].selected.has(winner);
+    if (!hit) anyMiss = true;
+    const horse = groups.get(raceKey).find(r => String(r.kulvar) === winner);
+    const name = horse ? horse.atIsmi : '';
+    return `<div class="result-line ${hit ? 'hit' : 'miss'}">${hit ? '✅' : '❌'} Yarış ${escapeHtml(raceKey)}: kazanan ${escapeHtml(winner)} ${escapeHtml(name)}${hit ? ' — kuponunuzda vardı' : ' — kuponunuzda yoktu'}</div>`;
+  });
+
+  const enteredCount = includedKeys.filter(k => couponResults[k]).length;
+  let banner;
+  if (anyMiss) {
+    banner = `<div class="result-banner lose">❌ KUPON TUTMADI</div>`;
+  } else if (enteredCount === includedKeys.length) {
+    banner = `<div class="result-banner win">🎉 KUPON TUTTU!</div>`;
+  } else {
+    banner = `<div class="result-banner pending">⏳ Şu ana kadar ${enteredCount}/${includedKeys.length} ayak girildi, hepsi tuttu — devam ediyor</div>`;
+  }
+
+  outcomeEl.innerHTML = banner + lines.join('');
+}
+
 /* ================================ FILE IMPORT ================================ */
 
 // Excel exports of Turkish data are frequently saved as Windows-1254, not UTF-8;
@@ -1245,6 +1309,7 @@ function handleFile(file) {
       state.fileName = file.name;
       couponState = { legs: {} };
       couponMeta = { city: null, yd: 1, gun: null, bahis: null, misli: 1 };
+      couponResults = {};
       ensureSyncCode();
       saveState();
       renderAll();
@@ -1349,6 +1414,10 @@ function init() {
   document.getElementById('exportAllBtn').addEventListener('click', exportResults);
   document.getElementById('unitPriceInput').addEventListener('input', renderCoupon);
   document.getElementById('resetCouponBtn').addEventListener('click', resetCouponToFavorites);
+  document.getElementById('resetResultCheckBtn').addEventListener('click', () => {
+    couponResults = {};
+    renderResultCheck();
+  });
   let budgetDebounceTimer = null;
   document.getElementById('targetBudgetInput').addEventListener('input', (e) => {
     clearTimeout(budgetDebounceTimer);
