@@ -124,20 +124,32 @@ table tr:hover td{background:var(--surface2);}
 .coupon-price-label input{padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:0.9rem;width:150px;font-family:inherit;}
 .coupon-price-label input:focus{border-color:var(--gold);outline:none;}
 
-.coupon-legs{display:flex;gap:10px;flex-wrap:wrap;overflow-x:auto;padding-bottom:6px;}
-.coupon-leg{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 8px;min-width:96px;text-align:center;flex:0 0 auto;}
+/* Coupon legs are styled like the real TJK paper betting slip: a small red
+   "ticket" card per race with a solid red header badge and a two-column
+   grid of numbers (1..half / half+1..max, one row per pair) instead of one
+   long vertical list — this stays a fixed cream/red "paper" look in both
+   light and dark app themes, on purpose, since it's meant to read as a
+   physical coupon embedded in the UI, not as themed app chrome. */
+.coupon-legs{display:flex;gap:10px;flex-wrap:wrap;padding-bottom:6px;}
+.coupon-leg{background:#fdf6ee;border:2px solid var(--red);border-radius:8px;overflow:hidden;min-width:108px;text-align:center;flex:0 0 auto;}
 .coupon-leg.leg-off{opacity:0.45;}
-.coupon-leg-head{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
-.coupon-leg-title{font-size:0.74rem;font-weight:700;color:var(--gold);}
-.coupon-leg-meta{font-size:0.62rem;color:var(--text3);}
-.coupon-leg-topn{width:48px;padding:3px 4px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.75rem;text-align:center;font-family:inherit;margin:0 auto;}
-.coupon-leg-numbers{display:flex;flex-direction:column;gap:2px;}
-.coupon-leg-number{padding:3px 0;font-size:0.68rem;color:var(--text3);border-radius:10px;user-select:none;}
-.coupon-leg-number.clickable{cursor:pointer;color:var(--text);transition:background .1s;}
-.coupon-leg-number.clickable:hover{background:var(--surface3);}
-.coupon-leg-number.empty-slot{opacity:0.2;}
-.coupon-leg-number.marked{background:var(--gold);color:#0f0e0c;font-weight:800;}
-.coupon-leg-number.marked:hover{background:var(--gold2);}
+
+.coupon-leg-head{background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 6px;flex-wrap:wrap;}
+.coupon-leg-badge{font-family:'Playfair Display',serif;font-weight:900;font-size:0.95rem;color:#fff;}
+.coupon-leg-toggle{display:flex;align-items:center;gap:3px;font-size:0.62rem;color:#fff;cursor:pointer;}
+.coupon-leg-meta{width:100%;font-size:0.6rem;color:rgba(255,255,255,0.85);}
+
+.coupon-leg-numbers{display:flex;flex-direction:column;}
+.coupon-leg-row{display:flex;border-bottom:1px solid rgba(224,90,78,0.25);}
+.coupon-leg-row:last-child{border-bottom:none;}
+.coupon-leg-number{flex:1;padding:3px 2px;font-size:0.72rem;font-weight:700;color:var(--red);user-select:none;}
+.coupon-leg-row .coupon-leg-number:first-child{border-right:1px solid rgba(224,90,78,0.25);}
+.coupon-leg-number.clickable{cursor:pointer;transition:background .1s;}
+.coupon-leg-number.clickable:hover{background:rgba(224,90,78,0.15);}
+.coupon-leg-number.empty-slot{color:rgba(224,90,78,0.3);}
+.coupon-leg-number.empty-cell{visibility:hidden;}
+.coupon-leg-number.marked{background:var(--red);color:#fff;}
+.coupon-leg-number.marked:hover{background:#c94a3f;}
 
 .coupon-summary{padding:14px 16px;background:var(--golddim);border:1px solid rgba(201,168,76,0.35);border-radius:var(--radius-sm);font-size:0.85rem;color:var(--text);}
 .coupon-summary .coupon-total{font-size:1.2rem;font-weight:800;color:var(--gold);font-family:'Playfair Display',serif;}
@@ -159,7 +171,8 @@ table tr:hover td{background:var(--surface2);}
   /* Legs stay side-by-side (flex-wrap on .coupon-legs already handles this on
      any width — they just wrap into narrower rows instead of one long row),
      matching the paper coupon and the desktop layout. Just narrow each card
-     a bit so 3 fit per row on a phone screen instead of 2. */
-  .coupon-leg{min-width:78px;padding:8px 4px;}
-  .coupon-leg-title{font-size:0.68rem;}
+     a bit so more fit per row on a phone screen. */
+  .coupon-leg{min-width:92px;}
+  .coupon-leg-badge{font-size:0.86rem;}
+  .coupon-leg-number{font-size:0.68rem;padding:2px 1px;}
 }

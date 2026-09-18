@@ -895,24 +895,32 @@ function renderCoupon() {
     scored.forEach(s => { horseByNumber[String(s.row.kulvar)] = s; });
     const maxNum = Math.max(22, scored.length);
 
-    const leg = document.createElement('div');
-    leg.className = 'coupon-leg' + (legState.included ? '' : ' leg-off');
-    const numbersHtml = Array.from({ length: maxNum }, (_, i) => i + 1).map(n => {
+    // Two columns of numbers (1..half, half+1..maxNum) side by side, one row
+    // per pair — mirrors the real TJK paper coupon's number grid layout
+    // instead of one long vertical list.
+    const half = Math.ceil(maxNum / 2);
+    const cell = (n) => {
+      if (n > maxNum) return '<div class="coupon-leg-number empty-cell"></div>';
       const key = String(n);
       const horse = horseByNumber[key];
       const marked = horse && legState.selected.has(key);
       const cls = 'coupon-leg-number' + (marked ? ' marked' : '') + (horse ? ' clickable' : ' empty-slot');
       const attrs = horse ? `data-leg="${escapeHtml(raceKey)}" data-num="${key}" title="${escapeHtml(horse.row.atIsmi)}"` : '';
       return `<div class="${cls}" ${attrs}>${n}</div>`;
-    }).join('');
+    };
+    const numbersHtml = Array.from({ length: half }, (_, i) =>
+      `<div class="coupon-leg-row">${cell(i + 1)}${cell(i + 1 + half)}</div>`
+    ).join('');
 
+    const leg = document.createElement('div');
+    leg.className = 'coupon-leg' + (legState.included ? '' : ' leg-off');
     leg.innerHTML = `
       <div class="coupon-leg-head">
-        <label style="display:flex;align-items:center;gap:4px;justify-content:center;font-size:0.7rem;color:var(--text2);">
+        <div class="coupon-leg-badge">${escapeHtml(raceKey)}.</div>
+        <label class="coupon-leg-toggle">
           <input type="checkbox" data-leg-toggle="${escapeHtml(raceKey)}" ${legState.included ? 'checked' : ''}>
           Dahil
         </label>
-        <div class="coupon-leg-title">Yarış ${escapeHtml(raceKey)}</div>
         <div class="coupon-leg-meta">${scored.length} at · ${legState.selected.size} seçili</div>
       </div>
       <div class="coupon-leg-numbers">${numbersHtml}</div>
