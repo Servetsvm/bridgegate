@@ -1,4 +1,4 @@
-const CACHE_NAME = 'at-yarisi-v1';
+const CACHE_NAME = 'at-yarisi-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -22,18 +22,19 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Network-first, cache as offline fallback only — this app changes often, so
+// always prefer the live file when online; a cache-first strategy here left
+// updated code invisible to returning users even after a hard refresh, since
+// the browser's own reload bypasses HTTP cache but not the service worker.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((res) => {
-        if (res && res.status === 200 && res.type === 'basic') {
-          const resClone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone));
-        }
-        return res;
-      }).catch(() => cached);
-    })
+    fetch(event.request).then((res) => {
+      if (res && res.status === 200 && res.type === 'basic') {
+        const resClone = res.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone));
+      }
+      return res;
+    }).catch(() => caches.match(event.request))
   );
 });
