@@ -865,6 +865,96 @@ function recalcAndRender() {
 // once a race has been rendered (defaults to the favorite).
 let couponState = { legs: {} };
 
+// Metadata mirroring the top of the real TJK paper coupon (şehir/YD/gün/
+// bahis/misli rows). Also ephemeral like couponState — city/day/bet-type
+// are just descriptive tags for this coupon, not saved dataset fields.
+// misli (stake multiplier) is the one row with a real effect: it multiplies
+// the final cost, same as writing "misli 10" on the paper slip.
+const TICKET_CITIES = ['İstanbul', 'Ankara', 'İzmir', 'Adana', 'Bursa', 'Kocaeli', 'Antalya', 'Ş.Urfa', 'Elazığ', 'D.Bakır'];
+const TICKET_DAYS = ['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pa'];
+const TICKET_BAHIS = ['G', 'P', 'Pl', 'İ', 'İo', 'İK', 'U', 'UK', 'T', 'TK', '5B', '5K', 'Ç', '3G', '4G', '5G', '6G', '7G', '7P', 'SİB'];
+const TICKET_MISLI = [1, 2, 3, 4, 5, 10, 20, 50, 100, 200, 300, 500];
+// Bet codes of the form "N Ganyan" — selecting one auto-includes exactly the
+// last N races of the day (TJK's own convention for these combination bets)
+// and excludes the rest, mirroring what a bettor actually does on paper.
+const NGANYAN_RE = /^([3-7])G$/;
+
+let couponMeta = { city: null, yd: 1, gun: null, bahis: null, misli: 1 };
+
+function guessCityFromFileName(name) {
+  if (!name) return null;
+  const lower = name.toLocaleLowerCase('tr');
+  return TICKET_CITIES.find(c => lower.includes(c.toLocaleLowerCase('tr').replace(/[.]/g, ''))) || null;
+}
+
+function renderTicketHeader(groups) {
+  const el = document.getElementById('ticketHeader');
+  if (!el) return;
+  if (couponMeta.city === null) couponMeta.city = guessCityFromFileName(state.fileName);
+
+  const raceKeys = Array.from(groups.keys());
+  const sortedRaceKeys = [...raceKeys].sort((a, b) => Number(a) - Number(b));
+
+  const chipRow = (label, values, metaKey, current) => `
+    <div class="ticket-row">
+      <span class="ticket-row-label">${escapeHtml(label)}</span>
+      <div class="ticket-chips">
+        ${values.map(v => `<button type="button" class="ticket-chip${String(current) === String(v) ? ' active' : ''}" data-meta="${escapeHtml(metaKey)}" data-val="${escapeHtml(String(v))}">${escapeHtml(String(v))}</button>`).join('')}
+      </div>
+    </div>`;
+
+  const kosuChips = sortedRaceKeys.map(k => {
+    const included = couponState.legs[k] ? couponState.legs[k].included : true;
+    return `<button type="button" class="ticket-chip${included ? ' active' : ''}" data-kosu="${escapeHtml(k)}">${escapeHtml(k)}</button>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="ticket-title">🐎 Türkiye Jokey Kulübü</div>
+    ${chipRow('ŞEHİR', TICKET_CITIES, 'city', couponMeta.city)}
+    ${chipRow('YD', [1, 2, 3, 4, 5], 'yd', couponMeta.yd)}
+    ${chipRow('GÜN', TICKET_DAYS, 'gun', couponMeta.gun)}
+    <div class="ticket-row">
+      <span class="ticket-row-label">KOŞU</span>
+      <div class="ticket-chips">${kosuChips}</div>
+    </div>
+    ${chipRow('BAHİS', TICKET_BAHIS, 'bahis', couponMeta.bahis)}
+    ${chipRow('MİSLİ', TICKET_MISLI, 'misli', couponMeta.misli)}
+  `;
+
+  el.querySelectorAll('button[data-kosu]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.kosu;
+      if (!couponState.legs[key]) return;
+      couponState.legs[key].included = !couponState.legs[key].included;
+      renderCoupon();
+    });
+  });
+  el.querySelectorAll('button[data-meta]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const metaKey = btn.dataset.meta;
+      const val = metaKey === 'yd' || metaKey === 'misli' ? Number(btn.dataset.val) : btn.dataset.val;
+      const defaultVal = metaKey === 'misli' || metaKey === 'yd' ? 1 : null;
+      const wasActive = couponMeta[metaKey] === val;
+      couponMeta[metaKey] = wasActive ? defaultVal : val;
+      if (metaKey === 'bahis' && !wasActive) {
+        const m = val.match(NGANYAN_RE);
+        if (m) selectLastNRaces(Number(m[1]), sortedRaceKeys);
+      }
+      renderCoupon();
+    });
+  });
+}
+
+// Mirrors picking "N'li Ganyan" on the paper coupon: only the last N races
+// of the day are combined, everything earlier is excluded.
+function selectLastNRaces(n, sortedRaceKeys) {
+  const lastN = new Set(sortedRaceKeys.slice(-n));
+  sortedRaceKeys.forEach(key => {
+    if (!couponState.legs[key]) return;
+    couponState.legs[key].included = lastN.has(key);
+  });
+}
+
 function renderCoupon() {
   const legsEl = document.getElementById('couponLegs');
   const summaryEl = document.getElementById('couponSummary');
@@ -938,13 +1028,16 @@ function renderCoupon() {
   });
 
   const totalCombos = anyIncluded ? combos : 0;
-  const totalCost = totalCombos * unitPrice;
+  const misli = couponMeta.misli || 1;
+  const totalCost = totalCombos * unitPrice * misli;
 
   summaryEl.innerHTML = `
     ${summaryLines.join('')}
-    <div class="coupon-line" style="margin-top:8px;">Toplam kombinasyon: <b>${totalCombos}</b></div>
+    <div class="coupon-line" style="margin-top:8px;">Toplam kombinasyon: <b>${totalCombos}</b>${misli > 1 ? ` × Misli <b>${misli}</b>` : ''}</div>
     <div class="coupon-total">Toplam ücret: ${totalCost.toFixed(2)} TL</div>
   `;
+
+  renderTicketHeader(groups);
 
   legsEl.querySelectorAll('input[data-leg-toggle]').forEach(cb => {
     cb.addEventListener('change', () => {
@@ -1113,6 +1206,8 @@ function handleFile(file) {
       }
       state.rows = result.rows;
       state.fileName = file.name;
+      couponState = { legs: {} };
+      couponMeta = { city: null, yd: 1, gun: null, bahis: null, misli: 1 };
       ensureSyncCode();
       saveState();
       renderAll();

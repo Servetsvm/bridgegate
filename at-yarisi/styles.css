@@ -119,6 +119,21 @@ table tr:hover td{background:var(--surface2);}
 .composite-bar{height:6px;border-radius:3px;background:var(--surface3);overflow:hidden;margin-top:4px;}
 .composite-fill{height:100%;border-radius:3px;background:var(--gold);}
 
+/* Top info block of the real TJK paper coupon (club title, şehir/YD/gün/
+   koşu/bahis/misli rows) — same red/cream "paper" look as the race legs.
+   ŞEHİR/YD/GÜN/BAHİS are single-select tags describing this coupon; KOŞU
+   toggles are the same "Dahil" flag as each leg's own checkbox; MİSLİ is
+   a real stake multiplier folded into the total cost. */
+.ticket-header{background:#fdf6ee;border:2px solid var(--red);border-radius:8px;padding:10px 12px;margin-bottom:16px;}
+.ticket-title{font-family:'Playfair Display',serif;font-weight:900;font-size:1rem;color:var(--red);text-align:center;margin-bottom:8px;}
+.ticket-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+.ticket-row:last-child{margin-bottom:0;}
+.ticket-row-label{flex:0 0 auto;width:46px;font-size:0.66rem;font-weight:800;color:var(--red);}
+.ticket-chips{display:flex;gap:4px;flex-wrap:wrap;}
+.ticket-chip{background:#fff;border:1px solid rgba(224,90,78,0.4);border-radius:12px;padding:2px 8px;font-size:0.66rem;font-weight:700;color:var(--red);cursor:pointer;font-family:inherit;transition:background .1s;}
+.ticket-chip:hover{background:rgba(224,90,78,0.15);}
+.ticket-chip.active{background:var(--red);color:#fff;border-color:var(--red);}
+
 .coupon-controls{display:flex;gap:16px;flex-wrap:wrap;align-items:end;margin-bottom:16px;}
 .coupon-price-label{display:flex;flex-direction:column;gap:4px;font-size:0.76rem;color:var(--text2);}
 .coupon-price-label input{padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:0.9rem;width:150px;font-family:inherit;}
