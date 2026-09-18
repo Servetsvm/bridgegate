@@ -415,6 +415,35 @@ function pctScore(v) {
 function hasNum(v) { return !isNaN(parseNumSmart(v)); }
 function hasRatioData(win, starts) { const s = parseNumSmart(starts); return !isNaN(s) && s > 0; }
 
+// TJK's official CSV export never includes jockey/trainer win% or distance/
+// surface/going history — so those categories would show "50.0" for every
+// single horse in every race: not a real score, just noise. This detects
+// which categories have NO data anywhere in the imported set and moves
+// their weight onto the categories that actually have data, proportionally.
+function computeEmptyCategories(rows) {
+  if (!rows.length) return { form: false, kilo: false, jokey: false, pist: false };
+  return {
+    form:  rows.every(r => parseSon5(r.son5).length === 0),
+    kilo:  rows.every(r => !hasNum(r.kilo) && !hasNum(r.hp) && !hasRatioData(r.mesafeGalibiyet, r.mesafeKosu)),
+    jokey: rows.every(r => !hasNum(r.jokeyWinPct) && !hasNum(r.antrenorWinPct)),
+    pist:  rows.every(r => !hasRatioData(r.pistGalibiyet, r.pistKosu) && !hasRatioData(r.zeminGalibiyet, r.zeminKosu)),
+  };
+}
+
+function computeEffectiveWeights(weights, empty) {
+  const keys = Object.keys(weights);
+  const activeKeys = keys.filter(k => !empty[k]);
+  if (!activeKeys.length) return { ...weights };
+  const emptySum = keys.filter(k => empty[k]).reduce((s, k) => s + weights[k], 0);
+  const activeSum = activeKeys.reduce((s, k) => s + weights[k], 0);
+  const result = {};
+  keys.forEach(k => {
+    if (empty[k]) { result[k] = 0; }
+    else { result[k] = activeSum > 0 ? weights[k] + (weights[k] / activeSum) * emptySum : weights[k]; }
+  });
+  return result;
+}
+
 function computeRaceScores(rows, weights) {
   const kiloScores = normalizeGroup(rows, r => parseNumSmart(r.kilo), false);
   const hpScores = normalizeGroup(rows, r => parseNumSmart(r.hp), true);
@@ -466,15 +495,23 @@ function renderFieldLegend() {
 function renderWeightsGrid() {
   const grid = document.getElementById('weightsGrid');
   grid.innerHTML = '';
+  const empty = computeEmptyCategories(state.rows);
+  const effective = computeEffectiveWeights(state.weights, empty);
   Object.keys(state.weights).forEach(key => {
     const meta = WEIGHT_META[key];
     const val = state.weights[key];
     const item = document.createElement('div');
     item.className = 'weight-item';
+    const emptyNote = empty[key]
+      ? `<div class="wdesc wempty">⚠ Bu veri setinde bu kriter için hiç veri yok — devre dışı, ağırlığı diğer kriterlere dağıtıldı.</div>`
+      : (Math.round(effective[key]) !== val
+          ? `<div class="wdesc">Gerçek etki: %${Math.round(effective[key])} (diğer kriterlerden devralınan pay dahil)</div>`
+          : '');
     item.innerHTML = `
       <label>${meta.label} <span class="wval">%${val}</span></label>
       <input type="range" min="0" max="100" value="${val}" data-weight-key="${key}">
       <div class="wdesc">${meta.desc}</div>
+      ${emptyNote}
     `;
     grid.appendChild(item);
   });
@@ -564,12 +601,24 @@ function addEmptyRow() {
 
 function renderResults() {
   const container = document.getElementById('racesContainer');
+  const legendEl = document.getElementById('resultsLegend');
   container.innerHTML = '';
-  if (!state.rows.length) return;
+  if (!state.rows.length) { if (legendEl) legendEl.innerHTML = ''; return; }
+
+  const empty = computeEmptyCategories(state.rows);
+  const effectiveWeights = computeEffectiveWeights(state.weights, empty);
+  const emptyLabels = Object.keys(empty).filter(k => empty[k]).map(k => WEIGHT_META[k].label);
+
+  if (legendEl) {
+    legendEl.innerHTML = `
+      <div class="legend-line"><span class="miss">•</span> = bu at için bu kriterde veri eksik; nötr (50) puan kısmen ya da tamamen varsayıldı.</div>
+      ${emptyLabels.length ? `<div class="legend-line">⚠ Bu dosyada hiç veri yok: <b>${emptyLabels.map(escapeHtml).join(', ')}</b> — ağırlıkları otomatik diğer kriterlere dağıtıldı.</div>` : ''}
+    `;
+  }
 
   const groups = groupByRace(state.rows);
   groups.forEach((rows, raceKey) => {
-    const scored = computeRaceScores(rows, state.weights);
+    const scored = computeRaceScores(rows, effectiveWeights);
     const block = document.createElement('div');
     block.className = 'race-block';
 
@@ -579,13 +628,16 @@ function renderResults() {
     if (first.pist) metaParts.push(first.pist);
     if (first.zemin) metaParts.push(first.zemin);
 
+    const favorite = scored[0];
+
     block.innerHTML = `
       <div class="race-block-head">
         <h3>Yarış ${escapeHtml(raceKey)}</h3>
         <span class="race-meta">${metaParts.map(escapeHtml).join(' · ')} · ${scored.length} at</span>
       </div>
+      <div class="favorite-line">🏆 Favori: <b>${escapeHtml(favorite.row.atIsmi)}</b> <span class="favorite-score">(Skor: ${favorite.composite.toFixed(1)})</span></div>
       <div class="horse-row header-row">
-        <span></span><span>At</span><span>Form</span><span>Kilo/HP/Mesafe</span><span>Jokey/Antrenör</span><span>Pist/Zemin</span><span>Skor</span>
+        <span></span><span>At</span><span>Form${empty.form ? ' (veri yok)' : ''}</span><span>Kilo/HP/Mesafe${empty.kilo ? ' (veri yok)' : ''}</span><span>Jokey/Antrenör${empty.jokey ? ' (veri yok)' : ''}</span><span>Pist/Zemin${empty.pist ? ' (veri yok)' : ''}</span><span>Skor</span>
       </div>
     `;
 
@@ -598,10 +650,10 @@ function renderResults() {
         <div class="horse-name">${escapeHtml(s.row.atIsmi)}
           <small>${[s.row.kulvar && 'K' + s.row.kulvar, s.row.jokey, s.row.antrenor].filter(Boolean).map(escapeHtml).join(' · ')}</small>
         </div>
-        ${subscoreBar(s.form, s.formPartial)}
-        ${subscoreBar(s.cat2, s.cat2Partial)}
-        ${subscoreBar(s.cat3, s.cat3Partial)}
-        ${subscoreBar(s.cat4, s.cat4Partial)}
+        ${subscoreBar(s.form, s.formPartial, empty.form)}
+        ${subscoreBar(s.cat2, s.cat2Partial, empty.kilo)}
+        ${subscoreBar(s.cat3, s.cat3Partial, empty.jokey)}
+        ${subscoreBar(s.cat4, s.cat4Partial, empty.pist)}
         <div class="composite">
           <div class="composite-val">${s.composite.toFixed(1)}</div>
           <div class="composite-bar"><div class="composite-fill" style="width:${clamp(s.composite,0,100)}%"></div></div>
@@ -614,7 +666,13 @@ function renderResults() {
   });
 }
 
-function subscoreBar(val, partial) {
+function subscoreBar(val, partial, datasetEmpty) {
+  if (datasetEmpty) {
+    return `<div class="subscore" title="Bu dosyada bu kriter için hiç veri yok">
+      <div class="subscore-val subscore-nodata">Veri Yok</div>
+      <div class="subscore-bar"><div class="subscore-fill" style="width:0%"></div></div>
+    </div>`;
+  }
   const title = partial ? 'Bu kriter için veri eksik; nötr (50) puan kısmen ya da tamamen varsayıldı' : '';
   return `<div class="subscore"${title ? ` title="${title}"` : ''}>
     <div class="subscore-val">${val.toFixed(1)}${partial ? ' <span class="miss">•</span>' : ''}</div>
@@ -756,10 +814,11 @@ function downloadBlob(text, filename) {
 
 function exportResults() {
   if (!state.rows.length) return;
+  const effectiveWeights = computeEffectiveWeights(state.weights, computeEmptyCategories(state.rows));
   const groups = groupByRace(state.rows);
   const lines = ['YarisNo;Sira;AtIsmi;Kulvar;Jokey;Antrenor;FormPuan;KiloHendikapMesafePuan;JokeyAntrenorPuan;PistZeminPuan;KompozitSkor'];
   groups.forEach((rows, raceKey) => {
-    const scored = computeRaceScores(rows, state.weights);
+    const scored = computeRaceScores(rows, effectiveWeights);
     scored.forEach((s, idx) => {
       lines.push([
         raceKey, idx + 1, s.row.atIsmi, s.row.kulvar || '', s.row.jokey || '', s.row.antrenor || '',

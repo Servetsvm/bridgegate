@@ -60,6 +60,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .weight-item .wval{color:var(--gold);font-weight:700;}
 .weight-item input[type=range]{width:100%;accent-color:var(--gold);}
 .weight-item .wdesc{font-size:0.68rem;color:var(--text3);margin-top:4px;}
+.weight-item .wempty{color:var(--gold2);}
 
 .btn-small{background:var(--gold);border:none;color:#0f0e0c;padding:8px 16px;border-radius:20px;font-weight:700;font-size:0.76rem;cursor:pointer;font-family:inherit;white-space:nowrap;}
 .btn-small:hover{background:var(--gold2);}
@@ -75,10 +76,19 @@ table tr:hover td{background:var(--surface2);}
 .results-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
 .results-head h2{font-size:1.05rem;color:var(--text);}
 
+.results-legend{font-size:0.72rem;color:var(--text2);line-height:1.7;margin-bottom:14px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);}
+.legend-line{margin-bottom:2px;}
+.legend-line:last-child{margin-bottom:0;}
+.legend-line b{color:var(--gold2);}
+
 .race-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:18px;overflow:hidden;}
 .race-block-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:var(--surface2);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px;}
 .race-block-head h3{font-size:0.95rem;color:var(--gold);font-family:'Playfair Display',serif;}
 .race-meta{font-size:0.7rem;color:var(--text2);}
+
+.favorite-line{padding:10px 18px;background:var(--golddim);border-bottom:1px solid var(--border);font-size:0.85rem;color:var(--text);}
+.favorite-line b{color:var(--gold2);}
+.favorite-score{color:var(--text2);font-size:0.78rem;}
 
 .horse-row{display:grid;grid-template-columns:36px 1.4fr 1fr 1fr 1fr 1fr 70px;gap:10px;align-items:center;padding:10px 18px;border-bottom:1px solid var(--border);}
 .horse-row:last-child{border-bottom:none;}
@@ -95,6 +105,7 @@ table tr:hover td{background:var(--surface2);}
 .subscore-bar{height:5px;border-radius:3px;background:var(--surface3);overflow:hidden;}
 .subscore-fill{height:100%;border-radius:3px;background:var(--blue);}
 .subscore-val{font-size:0.68rem;color:var(--text2);}
+.subscore-nodata{color:var(--text3);font-style:italic;}
 .composite{text-align:right;}
 .composite-val{font-size:1.15rem;font-weight:800;color:var(--gold);font-family:'Playfair Display',serif;}
 .composite-bar{height:6px;border-radius:3px;background:var(--surface3);overflow:hidden;margin-top:4px;}
