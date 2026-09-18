@@ -185,13 +185,34 @@ function serializeCouponLegs() {
 }
 
 function restoreCouponFromState() {
-  couponMeta = { city: null, yd: 1, gun: null, bahis: '6G', misli: 1, ...(state.couponMeta || {}) };
+  // `|| default` per field, not a blanket object spread — a couponMeta
+  // saved before "6G" became the default (or by anything that explicitly
+  // wrote bahis: null) would otherwise clobber the fallback with that null,
+  // since the object itself is still truthy even when its fields aren't set.
+  const savedMeta = state.couponMeta || {};
+  couponMeta = {
+    city: savedMeta.city ?? null,
+    yd: savedMeta.yd || 1,
+    gun: savedMeta.gun ?? null,
+    bahis: savedMeta.bahis || '6G',
+    misli: savedMeta.misli || 1,
+  };
   couponState = { legs: {} };
   const savedLegs = state.couponLegs || {};
   Object.keys(savedLegs).forEach(raceKey => {
     const leg = savedLegs[raceKey] || {};
     couponState.legs[raceKey] = { included: !!leg.included, selected: new Set(leg.selected || []) };
   });
+  // Self-heal: if the restored bahis is an N-Ganyan type, the included set
+  // MUST be "last N races" — re-derive it rather than trusting whatever was
+  // saved for `included`, in case it drifted (exactly what happened with
+  // state saved before "6G" was the default: bahis fell back to 6G here,
+  // but the old saved legs still had every race included).
+  const raceKeys = Object.keys(couponState.legs).sort((a, b) => Number(a) - Number(b));
+  const nganyanMatch = typeof couponMeta.bahis === 'string' ? couponMeta.bahis.match(NGANYAN_RE) : null;
+  if (nganyanMatch && raceKeys.length) {
+    selectLastNRaces(Number(nganyanMatch[1]), raceKeys);
+  }
   const unitPriceEl = document.getElementById('unitPriceInput');
   const targetBudgetEl = document.getElementById('targetBudgetInput');
   if (unitPriceEl) unitPriceEl.value = state.unitPrice || '1.25';
