@@ -23,10 +23,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:10px 22px;border-radius:30px;font-size:0.85rem;z-index:9999;transition:transform 0.3s,opacity 0.3s;opacity:0;pointer-events:none;white-space:nowrap;box-shadow:var(--shadow);}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
 
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;flex-wrap:wrap;gap:10px;}
-.topbar-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+/* Row 1 (topbar-main) is the logo + theme toggle, always together on one
+   line; the dataset chip is a second row underneath, inside the same
+   sticky bar — moved out of topbar-main so the toggle stays right next to
+   the logo on a phone instead of wrapping below the chip. */
+.topbar{display:flex;flex-direction:column;gap:6px;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;}
+.topbar-main{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 .topbar-logo{font-family:'Playfair Display',serif;font-size:1.15rem;font-weight:700;color:var(--gold);letter-spacing:0.3px;}
-.topbar-sub{font-size:0.72rem;color:var(--text2);background:var(--surface2);padding:3px 10px;border-radius:20px;border:1px solid var(--border);}
+.topbar-sub{font-size:0.72rem;color:var(--text2);background:var(--surface2);padding:3px 10px;border-radius:20px;border:1px solid var(--border);align-self:flex-start;}
 .topbar-right{display:flex;gap:8px;}
 .tbtn{background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:7px 14px;border-radius:20px;font-size:0.78rem;cursor:pointer;font-family:inherit;transition:border-color .15s,background .15s;}
 .tbtn:hover{border-color:var(--gold);background:var(--golddim);}
@@ -230,16 +234,16 @@ table tr:hover td{background:var(--surface2);}
      page instead of being shrunk back away; the page just scrolls further,
      same as the user asked for ("büyük yap aşağıya doğru"). Horizontal
      sizes are left alone on purpose so the 7 columns still fit the width. */
-  .ticket-header{padding:16px 12px 14px;}
-  .ticket-title{font-size:1.1rem;margin-bottom:12px;}
-  .ticket-row{margin-bottom:10px;}
-  .ticket-chip{padding:5px 8px;font-size:0.72rem;}
-  .ticket-row-label{font-size:0.72rem;}
-  .coupon-leg-head{padding:12px 6px;}
-  .coupon-leg-badge{font-size:1.05rem;}
-  .coupon-leg-hepsi{padding:2px 6px;font-size:0.75rem;}
-  .coupon-leg-meta{font-size:0.7rem;}
-  .coupon-leg-number{font-size:0.85rem;padding:7px 1px;}
+  .ticket-header{padding:20px 12px 18px;}
+  .ticket-title{font-size:1.2rem;margin-bottom:16px;}
+  .ticket-row{margin-bottom:14px;}
+  .ticket-chip{padding:7px 9px;font-size:0.76rem;}
+  .ticket-row-label{font-size:0.76rem;}
+  .coupon-leg-head{padding:16px 6px;}
+  .coupon-leg-badge{font-size:1.15rem;}
+  .coupon-leg-hepsi{padding:3px 7px;font-size:0.8rem;}
+  .coupon-leg-meta{font-size:0.74rem;}
+  .coupon-leg-number{font-size:0.95rem;padding:11px 1px;}
 
   /* The explanatory paragraphs aren't part of the physical paper coupon —
      drop them on mobile so the actual coupon grid stays as large as
