@@ -265,34 +265,75 @@ window.adminLoadBoardsFile=function(inp){
   };r.readAsText(f);
 };
 window.adminImportHandsOpen=function(){
-  openModal('Load PBN / LIN Hand File',`
-    <p style="font-size:0.82rem;color:var(--text2);margin-bottom:8px;">Upload a hand file in .pbn or .lin format.</p>
+  openModal('Load Hand Records',`
+    <p style="font-size:0.82rem;color:var(--text2);margin-bottom:8px;">Load the hands of this session: the file from your dealing machine or bridge program. The double-dummy analysis starts by itself.</p>
     <div style="background:var(--surface2);border-radius:6px;padding:10px;margin-bottom:10px;font-size:0.75rem;color:var(--text2);">
-      <b>Supported:</b> PBN · LIN (BBO) · CSV
+      <b>Supported:</b> PBN · DLM (Dealer4, Dealmaster) · DUP · BRI · DGE (Duplimate) · LIN (BBO)
     </div>
     <div class="import-drop" onclick="document.getElementById('handsFile').click()">
-      <div style="font-size:2rem;">🃏</div><div style="font-weight:600;">Select .pbn / .lin / .txt</div>
-      <input type="file" id="handsFile" accept=".pbn,.lin,.txt,.csv" onchange="adminLoadHandsFile(this)" style="display:none;">
+      <div style="font-size:2rem;">🃏</div><div style="font-weight:600;">Select a hand file</div>
+      <input type="file" id="handsFile" accept=".pbn,.lin,.txt,.csv,.dlm,.dup,.bri,.dge" onchange="adminLoadHandsFile(this)" style="display:none;">
     </div>
-    <div class="field"><label>Or paste file contents:</label><textarea id="handsText" rows="5" placeholder='[Board "1"]&#10;[Deal "N:AKQ.23.456.789 ..."]'></textarea></div>`,
+    <div class="login-err" id="handsErr"></div>
+    <div class="field"><label>Or paste file contents (PBN or LIN):</label><textarea id="handsText" rows="5" placeholder='[Board "1"]&#10;[Deal "N:AKQ.23.456.789 ..."]'></textarea></div>`,
     `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
      <button class="btn btn-gold" onclick="adminParseHandsText()">Load</button>`);
 };
+// keep the boards read from a file: the hands, then the analysis in the background
+function adminUseHands(res, source){
+  const err=document.getElementById('handsErr');
+  if(res.crypt){ if(err) err.textContent='❌ This file is locked (crypto key). Save the boards unlocked or as PBN in the dealer program.'; return; }
+  const hands=res.hands||[];
+  if(!hands.length){ if(err) err.textContent='❌ No complete boards found in this file'+(res.bad?' ('+res.bad+' damaged)':''); else toast('❌ Format not recognised'); return; }
+  hands.sort((a,b)=>(+a.board||0)-(+b.board||0));
+  _cache['hands']=hands; DB.set('hands',hands);
+  _cache['dd']={}; DB.set('dd',{});
+  addLog('ok','Hand file loaded',hands.length+' boards · '+(res.format||source)+(res.bad?' · '+res.bad+' damaged boards skipped':''));
+  toast('✅ '+hands.length+' boards loaded'+(res.bad?' — '+res.bad+' damaged boards skipped':''));
+  closeModal(); renderAdminTab();
+  startDDAnalysis();
+}
 window.adminLoadHandsFile=function(inp){
   const f=inp.files[0];if(!f)return;
-  const r=new FileReader();r.onload=e=>{document.getElementById('handsText').value=e.target.result;};r.readAsText(f);
+  const r=new FileReader();
+  r.onload=e=>{ try{ adminUseHands(readDealFile(f.name,new Uint8Array(e.target.result)),f.name); }catch(x){ const err=document.getElementById('handsErr'); if(err) err.textContent='❌ '+x.message; } };
+  r.readAsArrayBuffer(f);
+  inp.value='';
 };
 window.adminParseHandsText=function(){
   const raw=(document.getElementById('handsText').value||'').trim();
   if(!raw){toast('❌ File is empty');return;}
-  const hands=parsePBNorLIN(raw);
-  if(!hands.length){toast('❌ Format not recognised');return;}
-  _cache['hands']=hands;
-  DB.set('hands',hands);
-  addLog('ok','Hand file loaded',hands.length+' board hand records');
-  toast('✅ '+hands.length+' hands loaded!');
-  closeModal();renderAdminTab();
+  const res=readDealFile('pasted.txt',new TextEncoder().encode(raw));
+  if(!res.hands.length){ const old=parsePBNorLIN(raw); if(old.length){ res.hands=old; res.format='CSV'; } }
+  adminUseHands(res,'pasted');
 };
+
+// ══════════════════════════════════════════════════════
+//  DOUBLE-DUMMY ANALYSIS — worked out on the director's device in the background (dd.js), kept in /dd
+// ══════════════════════════════════════════════════════
+let _ddWorker=null, _ddRunning=false;
+function startDDAnalysis(force){
+  const hands=_cache['hands']||[]; if(!hands.length||_ddRunning) return;
+  const done=_cache['dd']||{};
+  const todo=hands.filter(h=>force||!done[String(h.board)]).map(h=>({board:h.board,deal:h.deal,vulnerable:h.vulnerable}));
+  if(!todo.length) return;
+  try{ _ddWorker=new Worker('dd.js'); }catch(e){ toast('❌ Analysis is not available on this device'); return; }
+  _ddRunning=true; let got=0;
+  const res={...done};
+  _ddWorker.onmessage=m=>{
+    const d=m.data||{};
+    if(d.done){ _ddRunning=false; _ddWorker.terminate(); _ddWorker=null; _cache['dd']=res; DB.set('dd',res); addLog('ok','Double-dummy analysis finished',got+' boards'); toast('✅ Analysis ready: '+got+' boards'); if(role==='admin'&&adminTab==='boards')renderAdminTab(); return; }
+    got++; if(d.res) res[d.board]=d.res;
+    _cache['dd']=res;
+    if(got%4===0||got===todo.length) DB.set('dd',res);   // the others see it come in
+    const p=document.getElementById('ddProgress'); if(p) p.textContent='⏳ '+got+' / '+todo.length;
+    if(role==='admin'&&adminTab==='boards'&&!document.querySelector('#modalBg.open'))renderAdminTab();
+  };
+  _ddWorker.onerror=()=>{ _ddRunning=false; toast('❌ Analysis stopped'); };
+  _ddWorker.postMessage({boards:todo});
+  toast('🧮 Analysing '+todo.length+' boards…');
+}
+window.startDDAnalysis=startDDAnalysis;
 function parsePBNorLIN(raw){
   const hands=[];
   if(raw.indexOf('[Board')!==-1){
@@ -579,8 +620,8 @@ window.adminSaveAdj=function(t){
 // ── Boards overview ──
 function renderBoards(){
   const boards=getBoards();const keys=Object.keys(boards).filter(k=>boards[k].status==='done').sort();
-  if(!keys.length)return`<div class="empty-state"><div class="empty-icon">📊</div>No boards entered yet</div>`;
-  return`<div class="card">
+  if(!keys.length)return renderHandsAnalysis()+`<div class="empty-state"><div class="empty-icon">📊</div>No boards entered yet</div>`;
+  return renderHandsAnalysis()+`<div class="card">
     <div class="card-title"><span>📊</span> All Completed Boards (${keys.length})</div>
     <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
       <button class="btn btn-blue btn-sm" onclick="adminExportBoards()">⬇ Export JSON</button>
@@ -836,3 +877,59 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Enter'&&document.activeElement?.id==='pwInput')doLogin();
   if(e.key==='Enter'&&document.activeElement?.id==='tableInput')bmSelectTable();
 });
+
+// ── Hands & double-dummy analysis (Boards tab) ──
+const DD_SYM=['♣','♦','♥','♠','NT'], DD_SEAT='NESW';
+const ddRed=s=>s==='♥'||s==='♦';
+function ddSuitLine(sym,cards){return `<div class="dd-sl"><span class="${ddRed(sym)?'dd-red':''}">${sym}</span> ${cards?cards.split('').map(c=>c==='T'?'10':c).join(' '):'—'}</div>`;}
+// the four hands round the table (North on top), from a PBN deal "N:… … … …"
+function ddDiagram(deal){
+  const m=String(deal||'').match(/^N:(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/);if(!m)return'';
+  const hand=(i,name)=>{const p=m[i].split('.');return `<div class="dd-hand"><b>${name}</b>${['♠','♥','♦','♣'].map((s,k)=>ddSuitLine(s,p[k])).join('')}</div>`;};
+  return `<div class="dd-diag"><div class="dd-n">${hand(1,'N')}</div><div class="dd-w">${hand(4,'W')}</div><div class="dd-e">${hand(2,'E')}</div><div class="dd-s">${hand(3,'S')}</div></div>`;
+}
+// tricks for each declarer in each strain
+function ddTableHtml(t){
+  if(!t)return'';
+  return `<table class="mv-table dd-tab"><thead><tr><th></th>${[4,3,2,1,0].map(s=>`<th class="${ddRed(DD_SYM[s])?'dd-red':''}">${DD_SYM[s]}</th>`).join('')}</tr></thead><tbody>${[0,2,1,3].map(d=>`<tr><th>${DD_SEAT[d]}</th>${[4,3,2,1,0].map(s=>{const n=t[d][s];return `<td class="${n>=7?'dd-make':''}">${n==null?'?':n>=7?n-6:'–'}</td>`;}).join('')}</tr>`).join('')}</tbody></table>
+  <div class="dd-note">The numbers are the level each player can make as declarer (– = not even 1); all four hands open, best play on both sides.</div>`;
+}
+// a result at a table against the analysis: how many tricks were taken compared with double dummy
+function ddCompare(d,dd){
+  if(!dd||!d||!d.level||!d.suit||!d.declarer)return'';
+  const si=DD_SYM.indexOf(d.suit),di=DD_SEAT.indexOf(d.declarer);if(si<0||di<0)return'';
+  const best=dd.t[di][si];if(best==null)return'';
+  const took=d.level+6+(+d.result||0),diff=took-best;
+  return diff===0?'<span class="dd-eq">= DD</span>':diff>0?`<span class="dd-up">+${diff} vs DD</span>`:`<span class="dd-down">${diff} vs DD</span>`;
+}
+function renderHandsAnalysis(){
+  const hands=_cache['hands']||[],dd=_cache['dd']||{};
+  const done=hands.filter(h=>dd[String(h.board)]).length;
+  const head=`<div class="card-title"><span>🧮</span> Hands &amp; Double-Dummy Analysis</div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center;">
+      <button class="btn btn-blue btn-sm" onclick="adminImportHandsOpen()">🃏 Load hand file</button>
+      ${hands.length?`<button class="btn btn-gold btn-sm" onclick="startDDAnalysis(true)">🧮 Analyse again</button>`:''}
+      <span id="ddProgress" style="font-size:0.75rem;color:var(--text3);">${hands.length?(_ddRunning?'⏳ ':'')+done+' / '+hands.length+' analysed':''}</span>
+    </div>`;
+  if(!hands.length)return `<div class="card">${head}<div style="font-size:0.8rem;color:var(--text3);">Load the file from your dealing machine (Dealer4 .dlm, Duplimate .dup/.bri/.dge) or a PBN / LIN file: every board then shows its hands, what each player can make and the par score.</div></div>`;
+  if(!_ddRunning&&done<hands.length&&role==='admin')setTimeout(()=>startDDAnalysis(),300);   // continue an analysis that was interrupted
+  return `<div class="card">${head}<div class="dd-list">${hands.map(h=>{
+    const a=dd[String(h.board)];
+    return `<button class="dd-row" onclick="showBoardAnalysis('${String(h.board).replace(/[^0-9A-Za-z]/g,'')}')"><b>Board ${h.board}</b><span>${h.dealer||''} · ${h.vulnerable||''}</span><span class="dd-par">${a?'Par: '+a.par.text:'⏳'}</span></button>`;
+  }).join('')}</div></div>`;
+}
+window.showBoardAnalysis=function(b){
+  const h=(_cache['hands']||[]).find(x=>String(x.board)===String(b));if(!h)return;
+  const a=(_cache['dd']||{})[String(h.board)];
+  const boards=getBoards(),pairs=getPairs(),mv=getMovements();
+  const rows=Object.keys(boards).filter(k=>k.split('_')[2]===String(h.board)&&boards[k].status==='done').map(k=>{
+    const d=boards[k],[t,r]=k.split('_'),m=mv[r+'_'+t]||{};
+    return `<tr><td>T${t}/R${r}</td><td>${pairs[m.ns]?.name||m.ns||''}</td><td>${pairs[m.ew]?.name||m.ew||''}</td><td style="font-family:'Share Tech Mono',monospace;">${d.contract||'—'}</td><td>${typeof d.nsScore==='number'?(d.nsScore>0?'+':'')+d.nsScore:'—'}</td><td>${a?ddCompare(d,a):''}</td></tr>`;
+  }).join('');
+  openModal('Board '+h.board,`
+    <div style="font-size:0.75rem;color:var(--text2);margin-bottom:6px;">Dealer ${h.dealer||'?'} · Vulnerable: ${h.vulnerable||'?'}</div>
+    ${ddDiagram(h.deal)}
+    ${a?`<div class="dd-parline">Par: <b>${a.par.text}</b></div>${ddTableHtml(a.t)}`:'<div class="dd-note">⏳ The analysis of this board is not ready yet.</div>'}
+    ${rows?`<table class="mv-table" style="margin-top:10px;"><thead><tr><th>Table</th><th>NS</th><th>EW</th><th>Contract</th><th>NS score</th><th>Tricks</th></tr></thead><tbody>${rows}</tbody></table>`:''}`,
+    `<button class="btn btn-gold" onclick="closeModal()">Close</button>`);
+};

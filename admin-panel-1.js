@@ -224,12 +224,12 @@ window.adminUpdateCalc=function(){
     tables=Math.floor(players/4);
     const pairCount=tables*2+(phantom?1:0);
     if(mov==='mitchell')rounds=tables;
-    else if(mov==='howell')rounds=pairCount-1;
+    else if(mov==='howell')rounds=pairCount%2?pairCount:pairCount-1;   // an odd number of pairs: each pair sits out one round
     else rounds=parseInt(document.getElementById('aSwissRounds')?.value||7);
   }
   const totalBoards=rounds*bpr;
   const hint=document.getElementById('calcHint'), bprHint=document.getElementById('bprHint');
-  if(hint)hint.textContent=mov==='team'?`→ ${tables} tables · 2 teams · ${tables} pairs/team`:`→ ${tables} table${tables!==1?'s':''}${players%4!==0?' + phantom':''}`;
+  if(hint)hint.textContent=mov==='team'?`→ ${tables} tables · 2 teams · ${tables} pairs/team`:`→ ${tables} table${tables!==1?'s':''}${players%4!==0?(mov==='howell'?' + one pair sits out each round':' + phantom'):''}${mov==='howell'&&(()=>{const pc=Math.floor(players/4)*2+(players%4!==0?1:0);return pc+pc%2;})()<=6?' · ⚠ every table plays the same boards each round: one copy of the boards per table':''}`;
   if(bprHint&&rounds>0)bprHint.textContent=`→ ${bpr} boards/round × ${rounds} rounds = ${totalBoards} total boards`;
   window._computedRounds=rounds;window._computedTotalBoards=totalBoards;
 };
@@ -258,11 +258,11 @@ window.adminSetup=function(){
     pairCount=tables*2+(phantom?1:0);
     if(mov==='swiss'&&phantom){toast('❌ Swiss (v1) needs a player count divisible by 4 — no bye/phantom support yet');return;}
     if(mov==='mitchell')rounds=tables;
-    else if(mov==='howell')rounds=pairCount-1;
+    else if(mov==='howell')rounds=pairCount%2?pairCount:pairCount-1;
     else{swissRounds=parseInt(document.getElementById('aSwissRounds').value);if(isNaN(swissRounds)||swissRounds<3){toast('❌ Swiss: choose at least 3 rounds');return;}if(swissRounds>pairCount-1){toast(`❌ Swiss: max ${pairCount-1} rounds for ${pairCount} pairs`);return;}rounds=swissRounds;}
     const totalBoards=rounds*bpr;
     if(mov==='mitchell')result=generateMitchell(tables,bpr,phantom,totalBoards);
-    else if(mov==='howell')result=generateHowell(tables,bpr,totalBoards);
+    else if(mov==='howell')result=generateHowell(tables,bpr,totalBoards,phantom);
     else result=generateSwissRound1(pairCount,bpr,rounds);
   }
   const totalBoards=rounds*bpr;
@@ -511,7 +511,7 @@ window.adminFinish=async function(){
   s._finishedAt=new Date().toISOString();
   setState(s);
   const arc=getArchives();
-  arc.unshift({state:{...s},boards:getBoards(),pairs:getPairs(),movements:getMovements(),hands:_cache['hands']||[],finished:s._finishedAt});
+  arc.unshift({state:{...s},boards:getBoards(),pairs:getPairs(),movements:getMovements(),hands:_cache['hands']||[],dd:_cache['dd']||{},finished:s._finishedAt});
   setArchives(arc);
   addLog('ok','Tournament finished & archived','');
   toast('🏁 Tournament finished!');
@@ -598,7 +598,7 @@ window.adminReset=async function(){
       await new Promise(r=>setTimeout(r,500));
     }
   }
-  await Promise.all(['state','pairs','boards','movements','logs','approvals'].map(k=>DB.del(k)));
+  await Promise.all(['state','pairs','boards','movements','logs','approvals','hands','dd'].map(k=>DB.del(k)));
   Object.keys(_cache).filter(k=>k!=='playerdb').forEach(k=>delete _cache[k]);
   toast('🗑 Reset complete — Player Registry preserved');refreshTopbar();renderAdminTab();
 };

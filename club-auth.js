@@ -364,7 +364,7 @@ window.doLogin=async function(){
 window.sessionContinue=function(){renderAdminPanel();};
 window.sessionNew=async function(){
   if(!await confirmDialog('This will delete the current tournament. Are you sure?',{title:'New Tournament'}))return;
-  Promise.all(['state','pairs','boards','movements','logs','approvals'].map(k=>DB.del(k))).then(()=>renderAdminPanel());
+  Promise.all(['state','pairs','boards','movements','logs','approvals','hands','dd'].map(k=>DB.del(k))).then(()=>renderAdminPanel());
 };
 window.doLogout=function(){
   if(role==='table'&&bmTableNo){

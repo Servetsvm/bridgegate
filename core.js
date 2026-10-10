@@ -143,7 +143,7 @@ const getApprovals=()=>_cache['approvals']||{};
 const setApprovals=a=>DB.set('approvals',a);
 
 async function preloadCache(){
-  const keys=['state','pairs','boards','movements','logs','archives','approvals','tableLocks','playerdb'];
+  const keys=['state','pairs','boards','movements','logs','archives','approvals','tableLocks','playerdb','hands','dd'];
   await Promise.all(keys.map(k=>DB.get(k)));
 }
 
@@ -254,28 +254,77 @@ function generateMitchell(tableCount, boardsPerRound, hasPhantom, totalBoards){
   return{movements,pairs,rounds};
 }
 
-function generateHowell(tableCount, boardsPerRound, totalBoards){
+/* Howell: every pair meets every other pair once, and nobody plays the same boards twice.
+   n pairs (with an odd number of pairs a phantom is added: its opponent sits out that round) play n-1 rounds.
+   Pairs 0..m-1 (m = n-1) sit round a circle plus one pair "∞". A starter splits 1..m-1 into k = (m-1)/2 couples
+   {x, y} whose differences ±(x−y) cover 1..m-1 once; in round r, ∞ plays r and every couple plays as {x+r, y+r}, with board set a + r (∞'s match: a0 + r).
+   With all a different and {a0} ∪ {a-x, a-y} covering 0..m-1, every round has different sets at its tables
+   (boards move between tables) and every pair plays every set once (a Room square, found by a short search).
+   None exists for 2 and 3 tables: there all tables play the same set each round, so each table needs its own
+   copy of the boards. */
+// first the quick pattern (couples {d, m-d}), which works for nearly every size; then any couples
+function howellPatterned(m){
+  const k=(m-1)/2, h=new Array(k+1).fill(-1), cover=new Array(m).fill(false), usedH=new Array(m).fill(false);let steps=0;
+  const go=d=>{
+    if(++steps>2e6)return false;
+    if(d>k){const left=cover.indexOf(false);if(left<0||usedH[left])return false;h[0]=left;return true;}
+    for(let v=0;v<m;v++){const a=(v+d)%m,b=(v-d+m)%m;if(usedH[v]||cover[a]||cover[b])continue;usedH[v]=cover[a]=cover[b]=true;h[d]=v;if(go(d+1))return true;usedH[v]=cover[a]=cover[b]=false;}
+    return false;
+  };
+  return go(1)?[{x:0,y:null,a:h[0]},...Array.from({length:k},(_,i)=>({x:i+1,y:m-i-1,a:h[i+1]}))]:null;
+}
+function howellPlan(m){
+  if(m<7)return null;
+  const quick=howellPatterned(m);if(quick)return quick;
+  const k=(m-1)/2, paired=new Array(m).fill(false), cover=new Array(m).fill(false), usedA=new Array(m).fill(false), usedD=new Array(m).fill(false), plan=[];
+  paired[0]=true;let steps=0;
+  const go=()=>{
+    if(++steps>3e6)return false;
+    let x=paired.indexOf(false);
+    if(x<0){const a0=cover.indexOf(false);if(a0<0||usedA[a0])return false;plan.unshift({x:0,y:null,a:a0});return true;}
+    paired[x]=true;
+    for(let y=x+1;y<m;y++){
+      const d1=(y-x+m)%m,d2=(x-y+m)%m;   // the couples' differences cover 1..m-1 once: everyone meets everyone once
+      if(paired[y]||usedD[d1]||usedD[d2])continue;paired[y]=true;usedD[d1]=usedD[d2]=true;
+      for(let a=0;a<m;a++){
+        const p=(a-x+m)%m,q=(a-y+m)%m;
+        if(usedA[a]||cover[p]||cover[q])continue;
+        usedA[a]=cover[p]=cover[q]=true;plan.push({x,y,a});
+        if(go())return true;
+        plan.pop();usedA[a]=cover[p]=cover[q]=false;
+      }
+      paired[y]=false;usedD[d1]=usedD[d2]=false;
+    }
+    paired[x]=false;return false;
+  };
+  return go()?plan:null;
+}
+function generateHowell(tableCount, boardsPerRound, totalBoards, hasPhantom){
   const movements={};const pairs={};
-  const pairCount=tableCount*2;
-  const rounds=boardsPerRound>0?Math.floor(totalBoards/boardsPerRound):pairCount-1;
-  for(let i=1;i<=pairCount;i++) pairs['p'+i]={id:'p'+i,name:'Pair '+i,dir:'',startTable:0,isPhantom:false};
-  const totalBoardSets=rounds;
-  for(let r=1;r<=rounds;r++){
-    const players=Array.from({length:pairCount},(_,i)=>i+1);
-    const fixed=players[0];const rotating=players.slice(1);
-    const roundRotated=[...rotating.slice(r-1),...rotating.slice(0,r-1)];
-    for(let t=1;t<=tableCount;t++){
-      const p1=t===1?fixed:roundRotated[t-1];
-      const p2=roundRotated[pairCount-1-t+1]||roundRotated[0];
-      const boardSet=((r+t-2)%totalBoardSets);
-      const boardStart=boardSet*boardsPerRound+1;
+  const real=tableCount*2+(hasPhantom?1:0), n=real+(real%2), m=n-1, k=(m-1)/2;
+  for(let i=1;i<=real;i++) pairs['p'+i]={id:'p'+i,name:'Pair '+i,dir:'',startTable:0,isPhantom:false};
+  const rounds=boardsPerRound>0?Math.min(m,Math.floor(totalBoards/boardsPerRound)):m;
+  const plan=howellPlan(m);   // null: 2–3 tables, every table plays the same boards
+  // circle position v → pair v+1, ∞ → pair n (the phantom when the number of pairs is odd)
+  const pid=v=>v===m?(n>real?null:'p'+n):'p'+(v+1);
+  const nsN={};   // how often each pair has sat North-South: the one with fewer sits North-South
+  for(let r=0;r<rounds;r++){
+    const matches=plan?plan.map((c,i)=>c.y==null?[m,r,c.a,i]:[(c.x+r)%m,(c.y+r)%m,c.a,i])
+      :[[m,r,0,0],...Array.from({length:k},(_,i)=>[(r+i+1)%m,(r-i-1+m)%m,0,i+1])];
+    let table=0;
+    for(const [a,b,add,i] of matches){
+      const A=pid(a),B=pid(b);
+      if(!A||!B)continue;   // against the phantom: sits out this round
+      table++;
+      const set=plan?(add+r)%m:r;
+      const boardStart=set*boardsPerRound+1;
       const boardEnd=Math.min(boardStart+boardsPerRound-1,totalBoards);
-      const ns=t%2===1?'p'+p1:'p'+p2;
-      const ew=t%2===1?'p'+p2:'p'+p1;
-      movements[r+'_'+t]={ns,ew,boardStart,boardEnd};
+      const flip=(nsN[B]||0)<(nsN[A]||0);
+      const ns=flip?B:A, ew=flip?A:B; nsN[ns]=(nsN[ns]||0)+1;
+      movements[(r+1)+'_'+table]={ns,ew,boardStart,boardEnd};
     }
   }
-  return{movements,pairs,rounds};
+  return{movements,pairs,rounds,copies:!plan};
 }
 
 // ══════════════════════════════════════════════════════

@@ -306,3 +306,25 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   .table-grid{grid-template-columns:1fr;}
   .player-name-grid{grid-template-columns:1fr;}
 }
+
+/* ── Hands & double-dummy analysis ── */
+.dd-list{display:flex;flex-direction:column;gap:4px;max-height:420px;overflow-y:auto}
+.dd-row{display:grid;grid-template-columns:80px 90px 1fr;gap:8px;align-items:center;text-align:left;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font:inherit;font-size:0.78rem;cursor:pointer}
+.dd-row:hover{border-color:var(--gold)}
+.dd-row span{color:var(--text2)}
+.dd-row .dd-par{color:var(--gold);font-family:'Share Tech Mono',monospace}
+.dd-diag{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-areas:". n ." "w . e" ". s .";gap:4px 10px;margin:6px 0 10px;font-size:0.82rem}
+.dd-n{grid-area:n}.dd-w{grid-area:w}.dd-e{grid-area:e}.dd-s{grid-area:s}
+.dd-hand b{display:block;color:var(--gold);font-size:0.72rem;margin-bottom:2px}
+.dd-sl{white-space:nowrap;font-family:'Share Tech Mono',monospace;line-height:1.35}
+.dd-red{color:#e05555}
+.dd-tab{max-width:320px;margin:6px 0}
+.dd-tab td,.dd-tab th{text-align:center}
+.dd-tab td.dd-make{color:var(--green);font-weight:700}
+.dd-note{font-size:0.7rem;color:var(--text3);margin:4px 0}
+.dd-parline{font-size:0.85rem;margin:6px 0}
+.dd-parline b{color:var(--gold)}
+.dd-eq{color:var(--text3);font-size:0.72rem}
+.dd-up{color:var(--green);font-size:0.72rem;font-weight:700}
+.dd-down{color:var(--red);font-size:0.72rem;font-weight:700}
+@media (max-width:420px){.dd-diag{font-size:0.74rem;gap:4px 4px}.dd-row{grid-template-columns:70px 70px 1fr}}
