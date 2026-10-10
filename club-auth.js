@@ -11,8 +11,6 @@ const FIREBASE_CONFIG = {
   measurementId: "G-PS3K5YNR96"
 };
 
-// Default passwords (used only if Firebase has no passwords node yet)
-const DEFAULT_PASS = {admin:'2370', table:'1234'};
 
 // Generates a strong random password (avoids ambiguous chars like 0/O, 1/l/I)
 function genStrongPassword(len){
@@ -30,7 +28,6 @@ window.fillGeneratedPw=function(fieldId){
   el.value=genStrongPassword(10);
   setTimeout(()=>{ el.type='password'; },1500);
 };
-let _cachedPass = null;
 
 // ── Online-only enforcement ──
 {
@@ -51,7 +48,7 @@ async function checkClubExists(id){
     const r = await fetch(url,{cache:'no-store'});
     if(!r.ok) return null;
     const v = await r.json();
-    return (v && v.name) ? v : null;
+    return (v && v.name) ? cleanData(v) : null;
   }catch(e){ return null; }
 }
 
@@ -116,65 +113,44 @@ async function initClubGate(){
 }
 initClubGate();
 
-// Load passwords from Firebase (club-scoped, falls back to defaults)
-async function loadPasswords(){
-  if(_cachedPass) return _cachedPass;
-  try{
-    const url = await fbRootUrl('/clubs/'+CLUB_ID+'/passwords.json');
-    const res = await fetch(url, {cache:'no-store'});
-    if(res.ok){
-      const data = await res.json();
-      if(data && data.admin && data.table){
-        _cachedPass = data;
-        return _cachedPass;
-      }
-    }
-  } catch(e){ console.warn('Firebase password fetch failed, using defaults'); }
-  _cachedPass = {...DEFAULT_PASS};
-  return _cachedPass;
+// ══════════════════════════════════════════════════════
+//  SESSIONS — the password is never read by the app
+// ══════════════════════════════════════════════════════
+// Logging in writes /sess/{this device's hidden account} = {role, club, pw}. The database rules accept it only when
+// the password is right, and that session decides what this device may change (see database.rules.json).
+// Passwords themselves cannot be read by anyone; changing a password ends the sessions made with the old one.
+async function startSession(r, club, pw){
+  const token=await authToken(); const uid=window._authUid;
+  if(!token||!uid) throw new Error('No connection to the database');
+  const body=JSON.stringify(r==='superadmin'?{role:'super',pw:String(pw)}:{role:r,club:String(club),pw:String(pw)});
+  const res=await fetch(FB_BASE+'/sess/'+uid+'.json?auth='+token,{method:'PUT',headers:{'Content-Type':'application/json'},body});
+  if(res.ok) return true;
+  if(res.status===401) return false;   // wrong password (or the club is switched off)
+  throw new Error('Firebase error '+res.status);
+}
+async function endSession(){
+  try{ const token=await authToken(); const uid=window._authUid; if(token&&uid) await fetch(FB_BASE+'/sess/'+uid+'.json?auth='+token,{method:'DELETE'}); }catch(e){}
 }
 
-// Save passwords to Firebase (club-scoped)
-async function savePasswords(adminPw, tablePw){
-  const body = JSON.stringify({admin: adminPw, table: tablePw});
-  const url = await fbRootUrl('/clubs/'+CLUB_ID+'/passwords.json');
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: {'Content-Type': 'application/json'},
-    body
-  });
+// Change one of this club's passwords (admin or table); an admin stays logged in with the new one
+async function savePassword(which, newPw){
+  const url = await fbRootUrl('/clubs/'+CLUB_ID+'/passwords/'+which+'.json');
+  const res = await fetch(url, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(String(newPw))});
   if(!res.ok) throw new Error('Firebase write failed: ' + res.status);
-  _cachedPass = {admin: adminPw, table: tablePw};
+  if(which==='admin') await startSession('admin', CLUB_ID, newPw);
 }
 
 // ══════════════════════════════════════════════════════
 //  SUPER ADMIN — club-independent, manages /clubs/*
 // ══════════════════════════════════════════════════════
-const DEFAULT_SUPER_PASS = '99999';
-let _cachedSuperPass = null;
-
-async function fbAuthToken(){
-  return window._authToken || (window._getAuthToken ? await window._getAuthToken() : null);
-}
-
-async function loadSuperPassword(){
-  if(_cachedSuperPass) return _cachedSuperPass;
-  try{
-    const token = await fbAuthToken();
-    const url = FB_BASE+'/superadmin/password.json'+(token?'?auth='+token:'');
-    const r = await fetch(url,{cache:'no-store'});
-    if(r.ok){ const v = await r.json(); if(v){ _cachedSuperPass=v; return v; } }
-  }catch(e){}
-  _cachedSuperPass = DEFAULT_SUPER_PASS;
-  return _cachedSuperPass;
-}
+async function fbAuthToken(){ return authToken(); }
 
 async function saveSuperPassword(pw){
   const token = await fbAuthToken();
   const url = FB_BASE+'/superadmin/password.json'+(token?'?auth='+token:'');
   const r = await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(pw)});
   if(!r.ok) throw new Error('Firebase write failed: '+r.status);
-  _cachedSuperPass = pw;
+  await startSession('superadmin', null, pw);
 }
 
 // Lists all clubs: shallow key fetch, then one info fetch per club.
@@ -191,7 +167,7 @@ async function saListClubs(){
       const url = FB_BASE+'/clubs/'+id+'/info.json'+(token?'?auth='+token:'');
       const rr = await fetch(url,{cache:'no-store'});
       const v = rr.ok ? await rr.json() : null;
-      return {id, name:(v&&v.name)||id, created:(v&&v.created)||null, active:(v&&v.active!==false)};
+      return {id, name:cleanData((v&&v.name)||id), created:(v&&v.created)||null, active:(v&&v.active!==false)};
     }catch(e){ return {id, name:id, created:null, active:true}; }
   }));
   return infos.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
@@ -204,7 +180,8 @@ async function saCreateClub(id, name, adminPw, tablePw){
   const q = token?'?auth='+token:'';
   const infoRes = await fetch(FB_BASE+'/clubs/'+id+'/info.json'+q,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name, created:new Date().toISOString(), active:true})});
   if(!infoRes.ok) throw new Error('Firebase write failed: '+infoRes.status);
-  const pass = {admin:(adminPw||DEFAULT_PASS.admin), table:(tablePw||DEFAULT_PASS.table)};
+  if(!adminPw||!tablePw) throw new Error('Enter both passwords');
+  const pass = {admin:String(adminPw), table:String(tablePw)};
   const passRes = await fetch(FB_BASE+'/clubs/'+id+'/passwords.json'+q,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(pass)});
   if(!passRes.ok) throw new Error('Firebase write failed: '+passRes.status);
 }
@@ -219,7 +196,8 @@ async function saSetClubActive(id, active){
 async function saResetClubPasswords(id, adminPw, tablePw){
   const token = await fbAuthToken();
   const q = token?'?auth='+token:'';
-  const pass = {admin:(adminPw||DEFAULT_PASS.admin), table:(tablePw||DEFAULT_PASS.table)};
+  if(!adminPw||!tablePw) throw new Error('Enter both passwords');
+  const pass = {admin:String(adminPw), table:String(tablePw)};
   const r = await fetch(FB_BASE+'/clubs/'+id+'/passwords.json'+q,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(pass)});
   if(!r.ok) throw new Error('Firebase write failed: '+r.status);
 }
@@ -272,11 +250,11 @@ window.doLogin=async function(){
   // Super Admin — club-independent
   if(role==='superadmin'){
     if(loginBtn){loginBtn.disabled=true;loginBtn.textContent='Checking...';}
-    let SPASS;
-    try{ SPASS = await loadSuperPassword(); }
-    catch(e){ SPASS = DEFAULT_SUPER_PASS; }
+    let ok=false;
+    try{ ok = await startSession('superadmin', null, pw); }
+    catch(e){ if(loginBtn){loginBtn.disabled=false;loginBtn.textContent='Login';} err.textContent='❌ '+e.message; return; }
     if(loginBtn){loginBtn.disabled=false;loginBtn.textContent='Login';}
-    if(String(pw)!==String(SPASS)){ err.textContent='❌ Wrong password'; return; }
+    if(!ok){ err.textContent='❌ Wrong password'; return; }
     document.getElementById('loginScreen').style.display='none';
     document.getElementById('app').style.display='flex';
     document.getElementById('topbarRole').textContent='Super Admin';
@@ -304,13 +282,11 @@ window.doLogin=async function(){
 
   // Check password
   if(loginBtn){loginBtn.disabled=true;loginBtn.textContent='Checking...';}
-  let PASS;
-  try{ PASS = await loadPasswords(); }
-  catch(e){ PASS = {...DEFAULT_PASS}; }
+  let ok=false;
+  try{ ok = await startSession(role, CLUB_ID, pw); }
+  catch(e){ if(loginBtn){loginBtn.disabled=false;loginBtn.textContent='Login';} err.textContent='❌ '+e.message; return; }
   if(loginBtn){loginBtn.disabled=false;loginBtn.textContent='Login';}
-
-  if(role==='admin'&&String(pw)!==String(PASS.admin)){err.textContent='❌ Wrong password';return;}
-  if(role==='table'&&String(pw)!==String(PASS.table)){err.textContent='❌ Wrong password';return;}
+  if(!ok){err.textContent='❌ Wrong password';return;}
 
   // Preload all data from Firebase
   if(loginBtn){loginBtn.disabled=true;loginBtn.textContent='Loading...';}
@@ -411,7 +387,7 @@ window.showTableFinalResults=function(tableNo){
     </div>`;
 };
 window.performLogout=async function(){
-  if(role==='table')unlockAllMyTables();
+  if(role==='table'){ try{ await unlockAllMyTables(); }catch(e){} }
   if(role==='admin'){
     const st=getState();
     if(st&&st.status==='running'){
@@ -424,6 +400,7 @@ window.performLogout=async function(){
   finishLogoutUI();
 };
 function finishLogoutUI(){
+  setTimeout(endSession, 1500);   // this device may no longer change anything (after the last writes have gone out)
   document.getElementById('app').style.display='none';
   document.getElementById('loginScreen').style.display='flex';
   document.getElementById('topbarRound').style.display='none';

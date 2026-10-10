@@ -1,0 +1,38 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "sess": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid && (!newData.exists() || (newData.child('role').val() === 'super' && newData.child('pw').isString() && newData.child('pw').val() === root.child('superadmin/password').val()) || ((newData.child('role').val() === 'admin' || newData.child('role').val() === 'table') && newData.child('club').isString() && newData.child('pw').isString() && root.child('clubs').child(newData.child('club').val()).child('info/active').val() !== false && newData.child('pw').val() === root.child('clubs').child(newData.child('club').val()).child('passwords').child(newData.child('role').val()).val()))"
+      }
+    },
+
+    "superadmin": {
+      "password": {
+        ".write": "auth != null && root.child('sess').child(auth.uid).child('role').val() === 'super' && root.child('sess').child(auth.uid).child('pw').val() === root.child('superadmin/password').val() && newData.isString() && newData.val().length >= 4"
+      }
+    },
+
+    "clubs": {
+      ".read": "auth != null && root.child('sess').child(auth.uid).child('role').val() === 'super' && root.child('sess').child(auth.uid).child('pw').val() === root.child('superadmin/password').val()",
+      "$club": {
+        ".write": "auth != null && root.child('sess').child(auth.uid).child('role').val() === 'super' && root.child('sess').child(auth.uid).child('pw').val() === root.child('superadmin/password').val()",
+        "info": {
+          ".read": "auth != null"
+        },
+        "passwords": {
+          "$which": {
+            ".write": "($which === 'admin' || $which === 'table') && auth != null && root.child('sess').child(auth.uid).child('role').val() === 'admin' && root.child('sess').child(auth.uid).child('club').val() === $club && root.child('sess').child(auth.uid).child('pw').val() === root.child('clubs').child($club).child('passwords/admin').val() && newData.isString() && newData.val().length >= 4"
+          }
+        },
+        "bm": {
+          ".read": "auth != null",
+          ".write": "auth != null && root.child('sess').child(auth.uid).child('club').val() === $club && ((root.child('sess').child(auth.uid).child('role').val() === 'admin' && root.child('sess').child(auth.uid).child('pw').val() === root.child('clubs').child($club).child('passwords/admin').val()) || (root.child('sess').child(auth.uid).child('role').val() === 'table' && root.child('sess').child(auth.uid).child('pw').val() === root.child('clubs').child($club).child('passwords/table').val()))"
+        }
+      }
+    }
+  }
+}

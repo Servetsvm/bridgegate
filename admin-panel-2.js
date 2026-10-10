@@ -769,10 +769,10 @@ window.secChangeAdmin=async function(){
   if(!oldPw||!newPw||!newPw2){toast('❌ Fill all fields');return;}
   if(newPw.length<4){toast('❌ Min 4 characters');return;}
   if(newPw!==newPw2){toast('❌ Passwords do not match');return;}
-  const PASS=await loadPasswords();
-  if(oldPw!==PASS.admin){toast('❌ Current password incorrect');return;}
+  let okOld=false; try{ okOld=await startSession('admin', CLUB_ID, oldPw); }catch(e){}
+  if(!okOld){toast('❌ Current password incorrect');return;}
   try{
-    await savePasswords(newPw, PASS.table);
+    await savePassword('admin', newPw);
     toast('✅ Admin password updated');
     ['secAdminOld','secAdminNew','secAdminNew2'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   }catch(e){toast('❌ Firebase error: '+e.message);}
@@ -785,10 +785,10 @@ window.secChangeTable=async function(){
   if(!auth||!newPw||!newPw2){toast('❌ Fill all fields');return;}
   if(newPw.length<4){toast('❌ Min 4 characters');return;}
   if(newPw!==newPw2){toast('❌ Passwords do not match');return;}
-  const PASS=await loadPasswords();
-  if(auth!==PASS.admin){toast('❌ Admin password incorrect');return;}
+  let okAdm=false; try{ okAdm=await startSession('admin', CLUB_ID, auth); }catch(e){}
+  if(!okAdm){toast('❌ Admin password incorrect');return;}
   try{
-    await savePasswords(PASS.admin, newPw);
+    await savePassword('table', newPw);
     toast('✅ Table password updated');
     ['secTableAuth','secTableNew','secTableNew2'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   }catch(e){toast('❌ Firebase error: '+e.message);}

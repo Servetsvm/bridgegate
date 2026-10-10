@@ -15,15 +15,20 @@ let FBURL=null;     // = FB_BASE + '/clubs/' + CLUB_ID + '/bm', set in setClub()
 const _cache={};
 
 // ── Offline write queue ──
+// Each entry keeps the address without the sign-in token; a fresh token is added when it is sent
+// (a token runs out after an hour, so a stored one would be refused).
 const _writeQueue=[];
 let _queueProcessing=false;
+const _bare=u=>String(u||'').replace(/\?auth=.*$/,'');
 async function _processQueue(){
   if(_queueProcessing||!navigator.onLine||!_writeQueue.length)return;
   _queueProcessing=true;
   while(_writeQueue.length&&navigator.onLine){
     const {url,method,body}=_writeQueue[0];
     try{
-      await fetch(url,{method,headers:{'Content-Type':'application/json'},body});
+      const token=await authToken();
+      const r=await fetch(_bare(url)+(token?'?auth='+token:''),{method,headers:{'Content-Type':'application/json'},body});
+      if(r.status===401) toast('❌ Not allowed — please log in again');
       _writeQueue.shift();
       try{localStorage.setItem('bm_writeQueue',JSON.stringify(_writeQueue));}catch(e){}
     }catch(e){break;}
@@ -31,7 +36,11 @@ async function _processQueue(){
   _queueProcessing=false;
 }
 // Restore queue from localStorage on startup
-try{const q=JSON.parse(localStorage.getItem('bm_writeQueue')||'[]');if(Array.isArray(q))_writeQueue.push(...q);}catch(e){}
+try{const q=JSON.parse(localStorage.getItem('bm_writeQueue')||'[]');if(Array.isArray(q))_writeQueue.push(...q.map(x=>({...x,url:_bare(x.url)})));}catch(e){}
+function _queue(url,method,body){
+  _writeQueue.push({url:_bare(url),method,body});
+  try{localStorage.setItem('bm_writeQueue',JSON.stringify(_writeQueue));}catch(e){}
+}
 window.addEventListener('online',()=>{
   const b=document.getElementById('connBadge');
   if(b){b.style.background='var(--greendim)';b.style.color='var(--green)';b.textContent='🟢 Online';}
@@ -53,49 +62,64 @@ if('serviceWorker' in navigator){
   });
 }
 
+// The sign-in token (firebase-init.js is a module and loads a moment after this file: wait for it)
+async function authToken(){
+  for(let i=0;i<100&&!window._getAuthToken;i++) await new Promise(r=>setTimeout(r,50));
+  try{ return window._getAuthToken ? await window._getAuthToken() : null; }catch(e){ return null; }
+}
 async function fbUrl(path){
-  const token = window._authToken || (window._getAuthToken ? await window._getAuthToken() : null);
+  const token=await authToken();
   return FBURL+path+(token?('?auth='+token):'');
 }
-// Root-level (club-independent) requests: /clubs/*, /clubs_index, /superadmin/*
+// Root-level (club-independent) requests: /clubs/*, /superadmin/*, /sess/*
 async function fbRootUrl(path){
-  const token = window._authToken || (window._getAuthToken ? await window._getAuthToken() : null);
+  const token=await authToken();
   return FB_BASE+path+(token?('?auth='+token):'');
+}
+// Text from the database is shown inside the page: < > " ' are replaced by look-alike characters,
+// so a name can never become HTML or a script.
+const _SAFE={'<':'‹','>':'›','"':'”',"'":'’'};
+function cleanData(v){
+  if(typeof v==='string') return v.replace(/[<>"']/g,c=>_SAFE[c]);
+  if(Array.isArray(v)) return v.map(cleanData);
+  if(v&&typeof v==='object'){const o={};for(const k in v)o[k]=cleanData(v[k]);return o;}
+  return v;
 }
 const DB={
   async get(k){
     try{const url=await fbUrl('/'+k+'.json');const r=await fetch(url,{cache:'no-store'});
       if(!r.ok)return _cache[k]||null;
-      const v=await r.json();_cache[k]=v;return v;
+      const v=cleanData(await r.json());_cache[k]=v;return v;
     }catch(e){return _cache[k]||null;}
   },
   async set(k,v){
     _cache[k]=v;
     const url=await fbUrl('/'+k+'.json');
-    if(!navigator.onLine){
-      _writeQueue.push({url,method:'PUT',body:JSON.stringify(v)});
-      try{localStorage.setItem('bm_writeQueue',JSON.stringify(_writeQueue));}catch(e){}
-      return;
+    if(!navigator.onLine){_queue(url,'PUT',JSON.stringify(v));return;}
+    try{
+      const r=await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)});
+      if(r.status===401) toast('❌ Not allowed — please log in again');
     }
-    try{await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)});}
     catch(e){
       console.warn('FB write fail, queuing',k);
-      _writeQueue.push({url,method:'PUT',body:JSON.stringify(v)});
-      try{localStorage.setItem('bm_writeQueue',JSON.stringify(_writeQueue));}catch(e){}
+      _queue(url,'PUT',JSON.stringify(v));
     }
   },
   async del(k){
     delete _cache[k];
     const url=await fbUrl('/'+k+'.json');
-    if(!navigator.onLine){_writeQueue.push({url,method:'DELETE',body:null});return;}
-    try{await fetch(url,{method:'DELETE'});}
-    catch(e){_writeQueue.push({url,method:'DELETE',body:null});}
+    if(!navigator.onLine){_queue(url,'DELETE',null);return;}
+    try{
+      const r=await fetch(url,{method:'DELETE'});
+      if(r.status===401) toast('❌ Not allowed — please log in again');
+    }
+    catch(e){_queue(url,'DELETE',null);}
   },
   subscribe(k,cb){
     let last=undefined;
     const poll=async()=>{
       try{const url=await fbUrl('/'+k+'.json');const r=await fetch(url,{cache:'no-store'});
-        if(r.ok){const v=await r.json();const s=JSON.stringify(v);
+        if(r.ok){const v=cleanData(await r.json());const s=JSON.stringify(v);
           if(s!==last){last=s;_cache[k]=v;cb(v);}
         }
       }catch(e){}

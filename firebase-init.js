@@ -24,16 +24,21 @@
     });
   });
 
+  // A fresh token every time: the SDK keeps it and renews it before it runs out (after an hour), so a long
+  // tournament does not lose the connection. The same hidden account stays on this device (window._authUid).
+  let signing = null;
   window._getAuthToken = async function(){
+    try { await auth.authStateReady(); } catch (e) {}
     if (!auth.currentUser) {
-      await signInAnonymously(auth).catch(e => console.warn('Auth sign-in failed', e));
+      signing = signing || signInAnonymously(auth).catch(e => console.warn('Auth sign-in failed', e)).finally(() => { signing = null; });
+      await signing;
     }
     if (auth.currentUser) {
       const t = await auth.currentUser.getIdToken();
-      window._authToken = t;
+      window._authToken = t; window._authUid = auth.currentUser.uid;
       return t;
     }
     return null;
   };
 
-  signInAnonymously(auth).catch(e => console.warn('Initial anon sign-in failed', e));
+  window._getAuthToken();

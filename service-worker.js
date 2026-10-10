@@ -4,7 +4,7 @@
 // any .js/.css file). Otherwise returning users may keep loading a stale
 // cached version instead of your update. Suggested pattern:
 // 'bridgegate-v' + YYYYMMDD, e.g. 'bridgegate-v20260709'.
-const CACHE_NAME = 'bridgegate-v20260723-i18n';
+const CACHE_NAME = 'bridgegate-v20261010-secure';
 
 const APP_SHELL = [
   './',
