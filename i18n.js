@@ -20,6 +20,7 @@
     'Turkish':'Türkçe',
     'Club ID':'Kulüp Kimliği',
     'Continue':'Devam Et',
+    'Change club':'Kulüp değiştir',
     'Super Admin Login':'Süper Yönetici Girişi',
     'Admin':'Yönetici',
     'Table':'Masa',

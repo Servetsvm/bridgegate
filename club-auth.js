@@ -231,6 +231,7 @@ selRole('admin');
 
 // Entered from the club gate — Super Admin doesn't need a resolved club.
 window.enterSuperAdminLogin=function(){
+  const cl=document.getElementById('clubLinks'); if(cl) cl.style.display='none';
   document.getElementById('clubGate').style.display='none';
   document.getElementById('loginForm').style.display='block';
   document.getElementById('roleTabs').style.display='none';
@@ -239,6 +240,7 @@ window.enterSuperAdminLogin=function(){
   selRole('superadmin');
 };
 window.backToClubGate=function(){
+  const cl=document.getElementById('clubLinks'); if(cl) cl.style.display='flex';
   document.getElementById('loginForm').style.display='none';
   document.getElementById('roleTabs').style.display='flex';
   document.getElementById('backToClubGate').style.display='none';
@@ -414,12 +416,12 @@ function finishLogoutUI(){
     if(CLUB_ID){
       document.getElementById('clubGate').style.display='none';
       document.getElementById('loginForm').style.display='block';
-      document.getElementById('roleTabs').style.display='flex';
+      document.getElementById('roleTabs').style.display='flex'; { const cl=document.getElementById('clubLinks'); if(cl) cl.style.display='flex'; }
       document.getElementById('backToClubGate').style.display='none';
       document.getElementById('loginSub').textContent=CLUB_NAME||'Tournament Control System';
     } else {
       document.getElementById('loginForm').style.display='none';
-      document.getElementById('roleTabs').style.display='flex';
+      document.getElementById('roleTabs').style.display='flex'; { const cl=document.getElementById('clubLinks'); if(cl) cl.style.display='flex'; }
       document.getElementById('backToClubGate').style.display='none';
       document.getElementById('loginSub').textContent='Tournament Control System';
       document.getElementById('clubGate').style.display='block';
