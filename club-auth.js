@@ -248,6 +248,16 @@ window.backToClubGate=function(){
   document.getElementById('clubGate').style.display='block';
   selRole('admin');
 };
+// "Change club": forget the remembered club (this device and the address bar) and ask for a Club ID
+window.changeClub=function(){
+  CLUB_ID=null; CLUB_NAME=null; FBURL=null;
+  try{ localStorage.removeItem('bg_clubId'); }catch(e){}
+  try{ const u=new URL(location.href); u.searchParams.delete('club'); u.searchParams.delete('role'); history.replaceState(null,'',u); }catch(e){}
+  const badge=document.getElementById('topbarClub'); if(badge) badge.style.display='none';
+  backToClubGate();
+  const inp=document.getElementById('clubIdInput'); if(inp){ inp.value=''; setTimeout(()=>inp.focus(),50); }
+  const err=document.getElementById('clubErr'); if(err) err.textContent='';
+};
 
 window.doLogin=async function(){
   const err=document.getElementById('loginErr');err.textContent='';
