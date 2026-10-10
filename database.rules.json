@@ -6,7 +6,7 @@
     "sess": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid && (!newData.exists() || (newData.child('role').val() === 'super' && newData.child('pw').isString() && newData.child('pw').val() === root.child('superadmin/password').val()) || ((newData.child('role').val() === 'admin' || newData.child('role').val() === 'table') && newData.child('club').isString() && newData.child('pw').isString() && root.child('clubs').child(newData.child('club').val()).child('info/active').val() !== false && newData.child('pw').val() === root.child('clubs').child(newData.child('club').val()).child('passwords').child(newData.child('role').val()).val()))"
+        ".write": "auth != null && auth.uid === $uid && (!newData.exists() || (newData.child('role').val() === 'super' && (newData.child('pw').isString() || newData.child('pw').isNumber()) && newData.child('pw').val() === root.child('superadmin/password').val()) || ((newData.child('role').val() === 'admin' || newData.child('role').val() === 'table') && newData.child('club').isString() && (newData.child('pw').isString() || newData.child('pw').isNumber()) && root.child('clubs').child(newData.child('club').val()).child('info/active').val() !== false && newData.child('pw').val() === root.child('clubs').child(newData.child('club').val()).child('passwords').child(newData.child('role').val()).val()))"
       }
     },
 

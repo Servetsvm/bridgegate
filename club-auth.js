@@ -122,11 +122,16 @@ initClubGate();
 async function startSession(r, club, pw){
   const token=await authToken(); const uid=window._authUid;
   if(!token||!uid) throw new Error('No connection to the database');
-  const body=JSON.stringify(r==='superadmin'?{role:'super',pw:String(pw)}:{role:r,club:String(club),pw:String(pw)});
-  const res=await fetch(FB_BASE+'/sess/'+uid+'.json?auth='+token,{method:'PUT',headers:{'Content-Type':'application/json'},body});
-  if(res.ok) return true;
-  if(res.status===401) return false;   // wrong password (or the club is switched off)
-  throw new Error('Firebase error '+res.status);
+  // a password typed in the Firebase console without quotes is kept there as a number: a password of digits
+  // is also tried as a number
+  const tries=[String(pw)]; if(/^[1-9]\d{0,14}$/.test(String(pw))) tries.push(Number(pw));
+  for(const p of tries){
+    const body=JSON.stringify(r==='superadmin'?{role:'super',pw:p}:{role:r,club:String(club),pw:p});
+    const res=await fetch(FB_BASE+'/sess/'+uid+'.json?auth='+token,{method:'PUT',headers:{'Content-Type':'application/json'},body});
+    if(res.ok) return true;
+    if(res.status!==401) throw new Error('Firebase error '+res.status);
+  }
+  return false;   // wrong password (or the club is switched off)
 }
 async function endSession(){
   try{ const token=await authToken(); const uid=window._authUid; if(token&&uid) await fetch(FB_BASE+'/sess/'+uid+'.json?auth='+token,{method:'DELETE'}); }catch(e){}
