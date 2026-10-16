@@ -1,6 +1,8 @@
 //  ADMIN PANEL
 // ══════════════════════════════════════════════════════
 let adminTab='setup';
+// the admin screen's refresh timer (it was used without being declared: starting a tournament stopped with an error)
+var adminRefreshTimer=null;
 
 function renderAdminPanel(){
   document.getElementById('panelContent').innerHTML=`
