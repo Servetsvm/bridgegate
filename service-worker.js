@@ -40,7 +40,8 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((names) =>
-      Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n)))
+      // only BridgeGate's own old caches: other apps on servetsvm.github.io (Bridge Table) keep theirs
+      Promise.all(names.filter((n) => n !== CACHE_NAME && n.startsWith('bridgegate-')).map((n) => caches.delete(n)))
     )
   );
   self.clients.claim();
